@@ -51,6 +51,7 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <goto-programs/adjust_float_expressions.h>
 #include <goto-programs/initialize_goto_model.h>
 #include <goto-programs/instrument_preconditions.h>
+#include <goto-programs/link_goto_model.h>
 #include <goto-programs/link_to_library.h>
 #include <goto-programs/loop_ids.h>
 #include <goto-programs/mm_io.h>
@@ -69,7 +70,7 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <goto-programs/string_abstraction.h>
 #include <goto-programs/string_instrumentation.h>
 #include <goto-programs/validate_goto_model.h>
-#include <goto-programs/link_goto_model.h>
+
 
 #include <goto-instrument/cover.h>
 #include <goto-instrument/full_slicer.h>
@@ -477,9 +478,8 @@ void cbmc_parse_optionst::get_command_line_options(optionst &options)
 
   if(cmdline.isset("use-abstraction"))
   {
-    options.set_option(
-      "use-abstraction", cmdline.get_value("use-abstraction"));
-  } 
+    options.set_option("use-abstraction", cmdline.get_value("use-abstraction"));
+  }
 
   if(cmdline.isset("beautify"))
     options.set_option("beautify", true);
@@ -807,14 +807,16 @@ int cbmc_parse_optionst::get_goto_program(
   goto_model = initialize_goto_model(cmdline.args, ui_message_handler, options);
 
   if(cmdline.isset("use-abstraction"))
-  {    
+  {
     std::string abst_file = options.get_option("use-abstraction");
 
     abstraction_spect abst_info(abst_file, ui_message_handler);
 
-    std::vector<std::string> abstfiles = abst_info.get_abstraction_function_files();
+    std::vector<std::string> abstfiles =
+      abst_info.get_abstraction_function_files();
 
-    goto_modelt goto_model_for_abst_fns = initialize_goto_model(abstfiles, ui_message_handler, options);
+    goto_modelt goto_model_for_abst_fns =
+      initialize_goto_model(abstfiles, ui_message_handler, options);
 
     link_goto_model(goto_model, goto_model_for_abst_fns, ui_message_handler);
 

@@ -7,8 +7,8 @@ Authors: Murali Talupur, talupur@amazon.com
 
 \*******************************************************************/
 
-#ifndef CPROVER_GOTO_INSTRUMENT_ABSTSPEC_H
-#define CPROVER_GOTO_INSTRUMENT_ABSTSPEC_H
+#ifndef CPROVER_GOTO_INSTRUMENT_ABSTSPECT_H
+#define CPROVER_GOTO_INSTRUMENT_ABSTSPECT_H
 
 #include <limits>
 #include <list>
@@ -20,11 +20,13 @@ Authors: Murali Talupur, talupur@amazon.com
 class abstraction_spect
 {
 public:
-  abstraction_spect() {}
-  //This constructor parses the json abstraction specification and populates the class.
+  abstraction_spect()
+  {
+  }
+  // This constructor parses the json abstraction specification and populates the class.
   abstraction_spect(std::string, message_handlert &);
 
-  //gathers file names from all the individual specs and returns a list.
+  // gathers file names from all the individual specs and returns a list.
   std::vector<std::string> get_abstraction_function_files() const;
 
 public:
@@ -35,14 +37,18 @@ public:
     {
       std::vector<irep_idt> indices;
       std::vector<std::string> assumptions;
-      std::string shape_type;  // e.g. "*cc*"
+      std::string shape_type; // e.g. "*cc*"
     public:
-      abst_shapet() {}
+      abst_shapet()
+      {
+      }
       abst_shapet(
         std::vector<irep_idt> _indices,
         std::vector<std::string> _assumptions,
         std::string _shape_type)
-        : indices(_indices), assumptions(_assumptions), shape_type(_shape_type) {}
+        : indices(_indices), assumptions(_assumptions), shape_type(_shape_type)
+        {
+        }
       abst_shapet(const abst_shapet &other)
         : indices(other.indices),
           assumptions(other.assumptions),
@@ -67,15 +73,16 @@ public:
           return false;
         if(assumptions.size() != other.assumptions.size())
           return false;
-        for(size_t i=0; i<indices.size(); i++)
+        for(size_t i=0; i < indices.size(); i++)
           if(indices[i] != other.indices[i])
             return false;
-        for(size_t i=0; i<assumptions.size(); i++)
+        for(size_t i = 0; i<assumptions.size(); i++)
           if(assumptions[i] != other.assumptions[i])
             return false;
         return (shape_type == other.shape_type);
       }
-      static irep_idt get_index_name(const irep_idt &raw_name, const size_t &spec_index)
+      static irep_idt 
+      get_index_name(const irep_idt &raw_name, const size_t &spec_index)
       {
         return irep_idt(
           "$abst$spec" + std::to_string(spec_index) + "$" +
@@ -90,19 +97,29 @@ public:
         INVARIANT(indices.size()>0, "shape should have at least a length concrete variable");
         return *(indices.end()-1);
       }
-      std::vector<exprt> get_assumption_exprs(const namespacet &ns, const size_t &spec_index) const;
+      std::vector<exprt> get_assumption_exprs(
+        const namespacet &ns, 
+        const size_t &spec_index) const;
     };
 
     struct entityt
     {
-      //Name of the array/list being abstracted
-      irep_idt name; // should be in the id format: function::x::name, this is the unique identifier
+      // Name of the array/list being abstracted
+      irep_idt 
+        name; // Should be in the id format: function::x::name, this is the unique identifier
       std::string name_of_abst;
 
     public:
-      entityt(){}
-      entityt(irep_idt _name) : name(_name) {}
-      entityt(const entityt &_entity) : name(_entity.name), name_of_abst(_entity.name_of_abst) {}
+      entityt()
+      {
+      }
+      explicit entityt(irep_idt _name) : name(_name)
+      {
+      }
+      entityt(const entityt &_entity) 
+        : name(_entity.name), name_of_abst(_entity.name_of_abst)
+        {
+        }
 
 
       irep_idt entity_name() const
@@ -127,41 +144,43 @@ public:
     };
 
   protected:
-    //Abstraction func file
+    // Abstraction func file
     std::string abst_func_file;
 
-    //Arrays to be abstracted
+    // Arrays to be abstracted
     std::unordered_map<irep_idt, entityt> abst_arrays;
 
-    //Index vars to be abstracted
+    // Index vars to be abstracted
     std::unordered_map<irep_idt, entityt> abst_indices;
     
-    //Length vars to be abstracted
+    // Length vars to be abstracted
     std::unordered_map<irep_idt, entityt> abst_lengths;
 
     // Shape of the abstraction
     abst_shapet shape;
 
-    //Abstraction functions follow. These should be defined in the abstraction_funcs_file or
-    //they are hard-coded ones. In abstraction_funcs_file function will begin with prefixes
-    //such as is_precise, compare_indices,... followed by the some shape identifier.
+    // Abstraction functions follow. These should be defined in the abstraction_funcs_file or
+    // they are hard-coded ones. In abstraction_funcs_file function will begin with prefixes
+    // such as is_precise, compare_indices,... followed by the some shape identifier.
 
-    //Says if an index into the abstracted entity is precisely tracked or not.
+    // Says if an index into the abstracted entity is precisely tracked or not.
     irep_idt is_precise_func;
-    //Says how the two indices into abstracted entity compare.
+    // Says how the two indices into abstracted entity compare.
     irep_idt compare_indices_func;
-    //Addition over abstract indices
+    // Addition over abstract indices
     irep_idt addition_func;
-    //Subtraction over abstract indices
+    // Subtraction over abstract indices
     irep_idt minus_func;
-    //Translate a concrete index to an abst index
+    // Translate a concrete index to an abst index
     irep_idt abstract_func;
 
     // the index of this spect in the abstraction_spect
     size_t spect_index;
 
   public:
-    spect() {}
+    spect()
+    {
+    }
     spect(const spect &_spec)
       : abst_func_file(_spec.abst_func_file),
         abst_arrays(_spec.abst_arrays),
@@ -177,8 +196,8 @@ public:
     {
     }
 
-    //We will have functions for accessing and modifying the above data.
-    //_type: "array", "scalar", "length"
+    // We will have functions for accessing and modifying the above data.
+    // _type: "array", "scalar", "length"
     void insert_entity(const irep_idt &_name, const std::string &_type)
     {
       entityt new_entity(_name);
@@ -192,7 +211,7 @@ public:
         abst_indices.insert({_name, new_entity});
       }
       else
-        throw "Unknown entity type: " + _type;
+        throw "unknown entity type: " + _type;
     }
 
     const std::unordered_map<irep_idt, entityt> &get_abst_arrays() const
@@ -298,7 +317,7 @@ public:
       const std::string &shape_type)
     {
       std::vector<irep_idt> new_indices(indices);
-      for(auto &index: new_indices)
+      for(auto &index : new_indices)
         index = abst_shapet::get_index_name(index, spect_index);
       shape = abst_shapet(new_indices, assumptions, shape_type);
     }
@@ -312,10 +331,10 @@ public:
         return false;
       if(abst_indices.size() != other.abst_indices.size())
         return false;
-      for(const auto &array: abst_arrays)
+      for(const auto &array : abst_arrays)
         if(other.abst_arrays.find(array.first) == other.abst_arrays.end())
           return false;
-      for(const auto &index: abst_indices)
+      for(const auto &index : abst_indices)
         if(other.abst_indices.find(index.first) == other.abst_indices.end())
           return false;
       return shape == other.shape;
@@ -335,12 +354,12 @@ public:
     {
       spect_index = _index;
     }
-    //We need to update the abstracted array/list/var names as we cross the function boundary.
-    //For example, if function Foo has two arrays f1 and f2 that are abstracted.
-    //Function Bar is defined as void Bar(array b1, array b2) and suppose Foo calls Bar(f1,f2).
-    //Abst_spec in Foo will contain f1, f2. These should be renamed to b1, b2 to obtain abst_spec for Bar.
-    //The argument for the following function would be Foo, Bar, {f1: b1, f2: b2}
-    //Return a new spect reflecting the changes
+    // We need to update the abstracted array/list/var names as we cross the function boundary.
+    // For example, if function Foo has two arrays f1 and f2 that are abstracted.
+    // Function Bar is defined as void Bar(array b1, array b2) and suppose Foo calls Bar(f1,f2).
+    // Abst_spec in Foo will contain f1, f2. These should be renamed to b1, b2 to obtain abst_spec for Bar.
+    // The argument for the following function would be Foo, Bar, {f1: b1, f2: b2}
+    // Return a new spect reflecting the changes
     spect update_abst_spec(
       irep_idt old_function,
       irep_idt new_function,
@@ -374,7 +393,7 @@ public:
   // check if a variable is abstracted
   bool has_entity(const irep_idt &entity_name) const
   {
-    for(const spect &spec: specs)
+    for(const spect &spec : specs)
     {
       if(spec.has_entity(entity_name))
         return true;
@@ -384,7 +403,7 @@ public:
 
   bool has_array_entity(const irep_idt &entity_name) const
   {
-    for(const spect &spec: specs)
+    for(const spect &spec : specs)
     {
       if(spec.has_array_entity(entity_name))
         return true;
@@ -395,7 +414,7 @@ public:
   // check if a variable is an index to be abstracted
   bool has_index_entity(const irep_idt &entity_name) const
   {
-    for(const spect &spec: specs)
+    for(const spect &spec : specs)
     {
       if(spec.has_index_entity(entity_name))
         return true;
@@ -406,23 +425,23 @@ public:
   // return the spect that has the entity, should always run has_index_entity before running this function
   const spect &get_spec_for_index_entity(const irep_idt &entity_name) const
   {
-    for(const spect &spec: specs)
+    for(const spect &spec : specs)
     {
       if(spec.has_index_entity(entity_name))
         return spec;
     }
-    throw "Entity " + std::string(entity_name.c_str()) + " not found";
+    throw "entity " + std::string(entity_name.c_str()) + " not found";
   }
 
   // return the spect that has the entity, should always run has_array_entity before running this function
   const spect &get_spec_for_array_entity(const irep_idt &entity_name) const
   {
-    for(const spect &spec: specs)
+    for(const spect &spec : specs)
     {
       if(spec.has_array_entity(entity_name))
         return spec;
     }
-    throw "Entity " + std::string(entity_name.c_str()) + " not found";
+    throw "entity " + std::string(entity_name.c_str()) + " not found";
   }
 
   // compare if two spect have the same structure
@@ -433,7 +452,7 @@ public:
     // of both order and shape
     if(specs.size() != other.specs.size())
       return false;
-    for(size_t i=0; i<specs.size(); i++)
+    for(size_t i = 0; i<specs.size(); i++)
       if(!specs[i].compare_shape(other.specs[i]))
         return false;
     return true;
@@ -443,6 +462,7 @@ public:
   std::string get_entities_string() const;
   // print all entities
   void print_entities() const;
+
 protected:
   std::vector<spect> specs;
   irep_idt function; // function name, no need to have path

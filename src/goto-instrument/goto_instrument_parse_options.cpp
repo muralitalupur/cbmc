@@ -30,8 +30,8 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <goto-programs/ensure_one_backedge_per_target.h>
 #include <goto-programs/goto_convert_functions.h>
 #include <goto-programs/goto_inline.h>
-#include <goto-programs/interpreter.h>
 #include <goto-programs/initialize_goto_model.h>
+#include <goto-programs/interpreter.h>
 #include <goto-programs/label_function_pointer_call_sites.h>
 #include <goto-programs/link_goto_model.h>
 #include <goto-programs/link_to_library.h>
@@ -1024,11 +1024,13 @@ void goto_instrument_parse_optionst::instrument_goto_program()
 
     abstraction_spect abst_spec(abs_file, ui_message_handler);
 
-    std::vector<std::string> abstfiles = abst_spec.get_abstraction_function_files();
+    std::vector<std::string> abstfiles = 
+      abst_spec.get_abstraction_function_files();
 
-    am_abstractiont::link_abst_functions(goto_model, abst_spec, ui_message_handler, options);
-    
-    am_abstractiont::abstract_goto_program(goto_model, abst_spec);
+    rr_abstractiont::link_abst_functions(
+      goto_model, abst_spec, ui_message_handler, options);
+
+    rr_abstractiont::abstract_goto_program(goto_model, abst_spec);
   }
 
   // all checks supported by goto_check

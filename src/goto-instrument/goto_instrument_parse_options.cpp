@@ -1024,7 +1024,7 @@ void goto_instrument_parse_optionst::instrument_goto_program()
 
     abstraction_spect abst_spec(abs_file, ui_message_handler);
 
-    std::vector<std::string> abstfiles = 
+    std::vector<std::string> abstfiles =
       abst_spec.get_abstraction_function_files();
 
     rr_abstractiont::link_abst_functions(

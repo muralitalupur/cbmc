@@ -7,8 +7,8 @@ Authors: Murali Talupur, talupur@amazon.com
 
 \*******************************************************************/
 
-#ifndef CPROVER_GOTO_INSTRUMENT_ABSTSPECT_H
-#define CPROVER_GOTO_INSTRUMENT_ABSTSPECT_H
+#ifndef CPROVER_GOTO_INSTRUMENT_ABSTRACTION_ABSTSPECT_H
+#define CPROVER_GOTO_INSTRUMENT_ABSTRACTION_ABSTSPECT_H
 
 #include <limits>
 #include <list>
@@ -23,7 +23,8 @@ public:
   abstraction_spect()
   {
   }
-  // This constructor parses the json abstraction specification and populates the class.
+  // This constructor parses the json abstraction 
+  // specification and populates the class.
   abstraction_spect(std::string, message_handlert &);
 
   // gathers file names from all the individual specs and returns a list.
@@ -47,8 +48,8 @@ public:
         std::vector<std::string> _assumptions,
         std::string _shape_type)
         : indices(_indices), assumptions(_assumptions), shape_type(_shape_type)
-        {
-        }
+      {
+      }
       abst_shapet(const abst_shapet &other)
         : indices(other.indices),
           assumptions(other.assumptions),
@@ -73,15 +74,15 @@ public:
           return false;
         if(assumptions.size() != other.assumptions.size())
           return false;
-        for(size_t i=0; i < indices.size(); i++)
+        for(size_t i = 0; i < indices.size(); i++)
           if(indices[i] != other.indices[i])
             return false;
-        for(size_t i = 0; i<assumptions.size(); i++)
+        for(size_t i = 0; i < assumptions.size(); i++)
           if(assumptions[i] != other.assumptions[i])
             return false;
         return (shape_type == other.shape_type);
       }
-      static irep_idt 
+      static irep_idt
       get_index_name(const irep_idt &raw_name, const size_t &spec_index)
       {
         return irep_idt(
@@ -94,18 +95,20 @@ public:
       }
       const irep_idt get_length_index_name() const
       {
-        INVARIANT(indices.size()>0, "shape should have at least a length concrete variable");
+        INVARIANT(
+          indices.size()>0,
+          "shape should have at least a length concrete variable");
         return *(indices.end()-1);
       }
       std::vector<exprt> get_assumption_exprs(
-        const namespacet &ns, 
+        const namespacet &ns,
         const size_t &spec_index) const;
     };
 
     struct entityt
     {
       // Name of the array/list being abstracted
-      irep_idt 
+      irep_idt
         name; // Should be in the id format: function::x::name, this is the unique identifier
       std::string name_of_abst;
 
@@ -116,10 +119,10 @@ public:
       explicit entityt(irep_idt _name) : name(_name)
       {
       }
-      entityt(const entityt &_entity) 
+      entityt(const entityt &_entity)
         : name(_entity.name), name_of_abst(_entity.name_of_abst)
-        {
-        }
+      {
+      }
 
 
       irep_idt entity_name() const
@@ -186,7 +189,7 @@ public:
         abst_arrays(_spec.abst_arrays),
         abst_indices(_spec.abst_indices),
         abst_lengths(_spec.abst_lengths),
-        shape(_spec.shape), 
+        shape(_spec.shape),
         is_precise_func(_spec.is_precise_func),
         compare_indices_func(_spec.compare_indices_func),
         addition_func(_spec.addition_func),
@@ -250,13 +253,13 @@ public:
       return shape.get_length_index_name();
     }
 
-    //set abst func file path
+    // set abst func file path
     void set_abst_func_file(const std::string &_abst_func_file)
     {
       abst_func_file = _abst_func_file;
     }
 
-    //get abst func file
+    // get abst func file
     std::string get_abst_func_file() const
     {
       return abst_func_file;
@@ -323,7 +326,7 @@ public:
     }
 
     std::vector<exprt> get_assumption_exprs(const namespacet &ns) const;
-    
+
     // compare if two spect have the same abst shape
     bool compare_shape(const spect &other) const
     {
@@ -447,12 +450,12 @@ public:
   // compare if two spect have the same structure
   bool compare_shape(const abstraction_spect &other) const
   {
-    // In the update_abst_spec function, the result and the 
-    // original one should have the same spects in terms 
+    // In the update_abst_spec function, the result and the
+    // original one should have the same spects in terms
     // of both order and shape
     if(specs.size() != other.specs.size())
       return false;
-    for(size_t i = 0; i<specs.size(); i++)
+    for(size_t i = 0; i < specs.size(); i++)
       if(!specs[i].compare_shape(other.specs[i]))
         return false;
     return true;

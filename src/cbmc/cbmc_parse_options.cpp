@@ -819,7 +819,6 @@ int cbmc_parse_optionst::get_goto_program(
       initialize_goto_model(abstfiles, ui_message_handler, options);
 
     link_goto_model(goto_model, goto_model_for_abst_fns, ui_message_handler);
-
   }
 
   if(cmdline.isset("show-symbol-table"))
@@ -1154,6 +1153,7 @@ void cbmc_parse_optionst::help()
     HELP_TIMESTAMP
     " --write-solver-stats-to json-file\n"
     "                              collect the solver query complexity\n"
+    // NOLINTNEXTLINE(whitespace/line_length)
     " --use-abstraction abstraction-file\n"
     "                              abstract the program as specified in the abstraction-file" 
     "\n";

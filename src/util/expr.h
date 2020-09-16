@@ -84,11 +84,10 @@ public:
     return static_cast<const typet &>(find(ID_type));
   }
 
-
   static void indent_str(std::string &s, unsigned indent)
   {
-  for(unsigned i = 0; i < indent; i++)
-    s+= ' ';
+    for(unsigned i = 0; i < indent; i++)
+      s += ' ';
   }
 
   const std::string get_type_string(int depth) const
@@ -97,14 +96,14 @@ public:
 
     indent_str(etype, depth);
 
-    if(operands().empty()) 
+    if(operands().empty())
       return(etype);
-    else 
+    else
     {
       std::string res;
-      for(auto op : operands()) 
+      for(auto op : operands())
       {
-        res += op.get_type_string(depth+1);
+        res += op.get_type_string(depth + 1);
       }
       return (res);
     }

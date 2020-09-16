@@ -28,13 +28,13 @@ class rr_abstractiont
 public:
   // link abst functions to goto programs
   static void link_abst_functions(
-    goto_modelt &goto_model, 
+    goto_modelt &goto_model,
     const abstraction_spect &abst_spec, 
-    ui_message_handlert &msg_handler, 
+    ui_message_handlert &msg_handler,
     const optionst &options);
 
   // abstract goto programs
-  static void 
+  static void
   abstract_goto_program(goto_modelt &goto_model, abstraction_spect &abst_spec);
 };
 

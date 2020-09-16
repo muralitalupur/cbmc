@@ -167,6 +167,7 @@ BMC_DEPS =../src/cbmc/c_test_input_generator$(OBJEXT) \
           ../src/goto-cc/armcc_cmdline$(OBJEXT) \
           ../src/goto-cc/goto_cc_cmdline$(OBJEXT) \
           ../src/goto-instrument/source_lines$(OBJEXT) \
+          ../src/goto-instrument/abstraction_spect$(OBJEXT) \
           ../src/goto-instrument/cover$(OBJEXT) \
           ../src/goto-instrument/cover_basic_blocks$(OBJEXT) \
           ../src/goto-instrument/cover_filter$(OBJEXT) \

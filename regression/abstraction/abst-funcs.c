@@ -19,7 +19,6 @@ bool nndt_bool()
   return (i % 2);
 }
 
-
 size_t nndt_under(size_t bound)
 {
   size_t nd;
@@ -72,10 +71,10 @@ size_t concretize_1(size_t abs_ind, size_t a1)
   assert(a1 >= 0);
   if(abs_ind < 1)
   {
-    if(a1 == 0) 
+    if(a1 == 0)
     {
       assert(0);
-      return(0);
+      return (0);
     }
     else
       return (nndt_under(a1));
@@ -99,16 +98,17 @@ size_t add_abs_to_conc_1(size_t abs_ind, size_t num, size_t a1)
         return (abs_ind + 1);
     }
     //abs_ind = 1 or 2
-    else return (2);
+    else
+      return (2);
   }
   else
-    {
-      assert(num >= 2);
-      // This might be inefficient model checking wise.
-      // We can always write an explicit abstraction like we did for num = 1.
-      size_t conc = concretize_1(abs_ind, a1);
-      return (one_abs(conc + num, a1));
-    }
+  {
+    assert(num >= 2);
+    // This might be inefficient model checking wise.
+    // We can always write an explicit abstraction like we did for num = 1.
+    size_t conc = concretize_1(abs_ind, a1);
+    return (one_abs(conc + num, a1));
+  }
 }
 
 size_t sub_conc_from_abs_1(size_t abs_ind, size_t num, size_t a1)
@@ -132,8 +132,8 @@ size_t sub_conc_from_abs_1(size_t abs_ind, size_t num, size_t a1)
     // This might be inefficient model checking wise.
     // We can always write an explicit abstraction like we did for num = 1.
     size_t conc = concretize_1(abs_ind, a1);
-    assert(conc>=num);
-    return(one_abs(conc-num, a1));
+    assert(conc >= num);
+    return(one_abs(conc - num, a1));
   }
 }
 
@@ -145,7 +145,7 @@ size_t sub_conc_from_abs_1(size_t abs_ind, size_t num, size_t a1)
 // If model checking time is affected then we can split into finer cases.
 size_t two_abs(size_t index, size_t a1, size_t a2)
 {
-  if(a1 == 0 && a1+1 == a2)
+  if(a1 == 0 && a1 + 1 == a2)
   { // cc*
     if(index == a1)
       return 0;
@@ -165,7 +165,7 @@ size_t two_abs(size_t index, size_t a1, size_t a2)
     else
       return 3;
   }
-  else if(a1 == 0 && !(a1 + 1 == a2)) 
+  else if(a1 == 0 && !(a1 + 1 == a2))
   { // c*c*
     if(index == a1)
       return 0;
@@ -271,7 +271,7 @@ int is_precise_2(size_t abs_ind, size_t a1, size_t a2)
   if(a1 == 0 && a1 + 1 == a2)
   { // cc*
     return abs_ind == 0 || abs_ind == 1;
-  } 
+  }
   else if(!(a1 == 0) && a1 + 1 == a2)
   { // *cc*
     return abs_ind == 1 || abs_ind == 2;
@@ -644,7 +644,7 @@ size_t add_abs_to_conc_4(
     else
     {
       return (abs_ind > 7 - (a1 == 0) - (a1 + 1 == a2) - (a2 + 1 == a3) - 
-                                      (a3 + 1 == a4) ||
+                          (a3 + 1 == a4) ||
               nndt_bool())
                ? abs_ind
                : abs_ind + 1;

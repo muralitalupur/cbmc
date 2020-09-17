@@ -65,7 +65,7 @@ bool main()
   copy(&a1, &a2);
 
   // If a2's spec is not transferred to a1, then the search should result in out of bounds access.
-  // If a2's spec is transferred then inside search a1_len 
+  // If a2's spec is transferred then inside search a1_len
   // will get abstracted and there will be no out of bounds.
   bool res = search(a1, a1_len, key);
   return res;

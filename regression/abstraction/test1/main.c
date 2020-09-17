@@ -1,5 +1,5 @@
 #include <assert.h>
-#include<stdbool.h>
+#include <stdbool.h>
 #include <stdlib.h>
 
 #define MAX_LEN 100

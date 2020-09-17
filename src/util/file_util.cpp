@@ -85,7 +85,7 @@ std::string get_absolute_path(const std::string &rel_path)
 #ifndef _WIN32
   errno = 0;
   char rp[4096];
-  snprintf(rp, 4095, "%s", rel_path.c_str());
+  snprintf(rp, sizeof(rp), "%s", rel_path.c_str());
   char *wd = realpath(rel_path.c_str(), nullptr);
 
   if(wd == nullptr || errno != 0)

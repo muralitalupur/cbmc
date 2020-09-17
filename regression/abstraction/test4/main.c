@@ -37,7 +37,6 @@ bool bar(char *a1, size_t a1_len, char *a2, size_t a2_len, size_t i)
     return true;
 }
 
-
 void main()
 {
   const char *a1;

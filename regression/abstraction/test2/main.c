@@ -1,5 +1,5 @@
 #include <assert.h>
-#include<stdbool.h>
+#include <stdbool.h>
 #include <stdlib.h>
 
 #define MAX_LEN 100
@@ -33,7 +33,8 @@ int bar(char *a1, size_t a1_len, char *a2, size_t a2_len)
     return 0;
 }
 
-void main(){
+void main()
+{
   char *a1;
   char *a2;
   size_t a1_len;

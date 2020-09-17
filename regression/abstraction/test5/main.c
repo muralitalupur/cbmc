@@ -10,7 +10,7 @@ bool foo(char *a1, size_t a1_len, char *a2, size_t a2_len)
   bool res = true;
   if(a1_len == a2_len)
   {
-    for(size_t i=0; i < a1_len; i++)
+    for(size_t i = 0; i < a1_len; i++)
     {
       if(a2[i] != a1[i])
         res &= false;
@@ -22,7 +22,6 @@ bool foo(char *a1, size_t a1_len, char *a2, size_t a2_len)
     return false;
   }
 }
-
 
 void main()
 {

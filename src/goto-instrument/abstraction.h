@@ -29,7 +29,7 @@ public:
   // link abst functions to goto programs
   static void link_abst_functions(
     goto_modelt &goto_model,
-    const abstraction_spect &abst_spec, 
+    const abstraction_spect &abst_spec,
     ui_message_handlert &msg_handler,
     const optionst &options);
 

@@ -1,17 +1,18 @@
-#include <stdlib.h>
 #include <assert.h>
 #include <stdbool.h>
+#include <stdlib.h>
 
 #define MAX_LEN 100
 
-bool foo(char* a1, size_t a1_len, char* a2, size_t a2_len)
+bool foo(char *a1, size_t a1_len, char *a2, size_t a2_len)
 {
   bool res = true;
   if(a1_len == a2_len)
   {
     for(size_t i; i < a1_len; i++)
     {
-      if(a2[i] != a1[i] + 1) res &= false;
+      if(a2[i] != a1[i] + 1)
+        res &= false;
     }
     return res;
   }
@@ -21,21 +22,21 @@ bool foo(char* a1, size_t a1_len, char* a2, size_t a2_len)
   }
 }
 
-bool bar(char * a1, size_t a1_len, char * a2, size_t a2_len, size_t i)
+bool bar(char *a1, size_t a1_len, char *a2, size_t a2_len, size_t i)
 {
   assert(a1_len == a2_len);
   __CPROVER_assume(i < a1_len);
   if(a2[i] == a1[i] + 1)
     return true;
   else
-    return false; 
+    return false;
 }
 
 
 void main()
 {
-  const char * a1;
-  const char * a2;
+  const char *a1;
+  const char *a2;
   size_t a1_len;
   size_t a2_len;
   size_t i;
@@ -50,7 +51,7 @@ void main()
   {
     assert(bar(a1, a1_len, a2, a2_len, i));
   }
-  else 
+  else
     assert(true);
-    return;
+  return;
 }

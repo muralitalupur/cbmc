@@ -1,24 +1,25 @@
-#include <stdlib.h>
 #include <assert.h>
 #include <stdbool.h>
+#include <stdlib.h>
 
 #define MAX_LEN 100
 
-bool search(char* a, size_t a_len, char key)
+bool search(char *a, size_t a_len, char key)
 {
   bool res = false;
-  for(size_t i =0; i < a_len; i++)
+  for(size_t i = 0; i < a_len; i++)
   {
-    if(a[i] == key) res = true;
+    if(a[i] == key)
+      res = true;
   }
   return res;
 }
 
 bool main()
 {
-  const char * a1;
-  const char * a2;
-  const char * a3;
+  const char *a1;
+  const char *a2;
+  const char *a3;
   size_t a1_len;
   size_t a2_len;
   // Some char

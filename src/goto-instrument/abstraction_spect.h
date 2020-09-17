@@ -23,7 +23,7 @@ public:
   abstraction_spect()
   {
   }
-  // This constructor parses the json abstraction 
+  // This constructor parses the json abstraction
   // specification and populates the class.
   abstraction_spect(std::string, message_handlert &);
 
@@ -96,9 +96,9 @@ public:
       const irep_idt get_length_index_name() const
       {
         INVARIANT(
-          indices.size()>0,
+          indices.size() > 0,
           "shape should have at least a length concrete variable");
-        return *(indices.end()-1);
+        return *(indices.end() - 1);
       }
       std::vector<exprt> get_assumption_exprs(
         const namespacet &ns,
@@ -123,7 +123,6 @@ public:
         : name(_entity.name), name_of_abst(_entity.name_of_abst)
       {
       }
-
 
       irep_idt entity_name() const
       {
@@ -155,7 +154,7 @@ public:
 
     // Index vars to be abstracted
     std::unordered_map<irep_idt, entityt> abst_indices;
-    
+
     // Length vars to be abstracted
     std::unordered_map<irep_idt, entityt> abst_lengths;
 
@@ -312,7 +311,7 @@ public:
     {
       return abstract_func;
     }
-    
+
     // set the shape
     void set_shape(
       const std::vector<irep_idt> &indices,

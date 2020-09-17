@@ -71,7 +71,6 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <goto-programs/string_instrumentation.h>
 #include <goto-programs/validate_goto_model.h>
 
-
 #include <goto-instrument/cover.h>
 #include <goto-instrument/full_slicer.h>
 #include <goto-instrument/nondet_static.h>

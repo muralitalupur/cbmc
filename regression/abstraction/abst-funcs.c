@@ -10,13 +10,13 @@
 size_t nndt_int()
 {
   size_t i;
-  return(i);
+  return (i);
 }
 
 bool nndt_bool()
 {
   size_t i;
-  return(i % 2);
+  return (i % 2);
 }
 
 
@@ -24,7 +24,7 @@ size_t nndt_under(size_t bound)
 {
   size_t nd;
   __CPROVER_assume(nd < bound);
-  return(nd);
+  return (nd);
 }
 
 size_t nndt_between(size_t l, size_t u)
@@ -32,37 +32,38 @@ size_t nndt_between(size_t l, size_t u)
   size_t diff = u - l;
   size_t nd = nndt_under(diff);
   if(nd == 0)
-    return(l+1);
+    return (l + 1);
   else
-    return(nd + l);
+    return (nd + l);
 }
 
 size_t nndt_above(size_t bound)
 {
   size_t nd = nndt_int();
   __CPROVER_assume(nd < bound);
-  return(nd);
+  return (nd);
 }
 
 // For one index: *c*
 // covers c*, +c*
 size_t one_abs(size_t index, size_t a1)
 {
-  if(index < a1) return(0);
+  if(index < a1)
+    return (0);
   else if(index == a1)
-    return(1);
+    return (1);
   else
-    return(2);
+    return (2);
 }
 
 bool is_precise_1(size_t abs_ind, size_t a1)
 {
-  return(abs_ind == 1);
+  return (abs_ind == 1);
 }
 
 bool is_abstract_1(size_t abs_ind, size_t a1)
 {
-  return(abs_ind != 1);
+  return (abs_ind != 1);
 }
 
 size_t concretize_1(size_t abs_ind, size_t a1)
@@ -71,18 +72,18 @@ size_t concretize_1(size_t abs_ind, size_t a1)
   assert(a1 >= 0);
   if(abs_ind < 1)
   {
-    if (a1 == 0) 
+    if(a1 == 0) 
     {
       assert(0);
       return(0);
     }
     else
-      return(nndt_under(a1));
+      return (nndt_under(a1));
   }
   else if(abs_ind == 1)
-    return(a1);
+    return (a1);
   else
-    return(nndt_above(a1));
+    return (nndt_above(a1));
 }
 
 // Add a number to an abs_ind
@@ -92,23 +93,22 @@ size_t add_abs_to_conc_1(size_t abs_ind, size_t num, size_t a1)
   {
     if(abs_ind == 0)
     {
-      if (nndt_bool() > 0)
-        return(abs_ind);
+      if(nndt_bool() > 0)
+        return (abs_ind);
       else
-        return(abs_ind + 1);
+        return (abs_ind + 1);
     }
-        //abs_ind = 1 or 2
-        else return(2);
-    }
-    else
+    //abs_ind = 1 or 2
+    else return (2);
+  }
+  else
     {
       assert(num >= 2);
       // This might be inefficient model checking wise.
       // We can always write an explicit abstraction like we did for num = 1.
       size_t conc = concretize_1(abs_ind, a1);
-      return(one_abs(conc+num, a1));
+      return (one_abs(conc + num, a1));
     }
-
 }
 
 size_t sub_conc_from_abs_1(size_t abs_ind, size_t num, size_t a1)
@@ -118,26 +118,24 @@ size_t sub_conc_from_abs_1(size_t abs_ind, size_t num, size_t a1)
     if(abs_ind == 2)
     {
       if(nndt_bool() > 0)
-        return(abs_ind);
+        return (abs_ind);
       else
-        return(abs_ind - 1);
+        return (abs_ind - 1);
     }
     // abs_ind = 1 0r 0
     else
-      return(0);
+      return (0);
   }
   else
   {
-        assert(num >= 2);
-        // This might be inefficient model checking wise.
-        // We can always write an explicit abstraction like we did for num = 1.
-        size_t conc = concretize_1(abs_ind, a1);
-        assert(conc>=num);
-        return(one_abs(conc-num, a1));
-    }
+    assert(num >= 2);
+    // This might be inefficient model checking wise.
+    // We can always write an explicit abstraction like we did for num = 1.
+    size_t conc = concretize_1(abs_ind, a1);
+    assert(conc>=num);
+    return(one_abs(conc-num, a1));
+  }
 }
-
-
 
 // For two indices
 
@@ -147,8 +145,8 @@ size_t sub_conc_from_abs_1(size_t abs_ind, size_t num, size_t a1)
 // If model checking time is affected then we can split into finer cases.
 size_t two_abs(size_t index, size_t a1, size_t a2)
 {
-  if(a1==0 && a1+1==a2)
-  {  // cc*
+  if(a1 == 0 && a1+1 == a2)
+  { // cc*
     if(index == a1)
       return 0;
     else if(index == a2)
@@ -156,18 +154,21 @@ size_t two_abs(size_t index, size_t a1, size_t a2)
     else
       return 2;
   }
-  else if(!(a1==0) && a1+1==a2)
-  {  // *cc*
-    if(index < a1) return 0;
+  else if(!(a1 == 0) && a1 + 1 == a2)
+  { // *cc*
+    if(index < a1)
+      return 0;
     else if(index == a1)
       return 1;
     else if(index == a2)
       return 2;
-    else return 3;
+    else
+      return 3;
   }
-  else if(a1==0 && !(a1+1==a2)) 
-  {  // c*c*
-    if(index == a1) return 0;
+  else if(a1 == 0 && !(a1 + 1 == a2)) 
+  { // c*c*
+    if(index == a1)
+      return 0;
     else if(index > a1 && index < a2)
       return 1;
     else if(index == a2)
@@ -176,7 +177,7 @@ size_t two_abs(size_t index, size_t a1, size_t a2)
       return 3;
   }
   else
-  {  // *c*c*, !a1==0 && !a1+1==a2
+  { // *c*c*, !a1==0 && !a1+1==a2
     if(index < a1)
       return 0;
     else if(index == a1)
@@ -199,7 +200,7 @@ size_t concretize_2(size_t abs_ind, size_t a1, size_t a2)
   assert(a1 >= 0);
   assert(a2 > a1);
 
-  if(a1==0 && a1+1==a2)
+  if(a1 == 0 && a1 + 1 == a2)
   { // cc*
     if(abs_ind == 0)
       return a1;
@@ -209,13 +210,14 @@ size_t concretize_2(size_t abs_ind, size_t a1, size_t a2)
       return nndt_above(a2);
     else
     {
-      assert(0!=0);
+      assert(0 != 0);
       return 0;
     }
   }
-  else if(!(a1==0) && a1+1==a2)
+  else if(!(a1 == 0) && a1 + 1 == a2)
   { // *cc*
-    if(abs_ind == 0) return nndt_under(a1);
+    if(abs_ind == 0)
+      return nndt_under(a1);
     else if(abs_ind == 1)
       return a1;
     else if(abs_ind == 2)
@@ -224,11 +226,11 @@ size_t concretize_2(size_t abs_ind, size_t a1, size_t a2)
       return nndt_above(a2);
     else
     {
-      assert(0!=0);
+      assert(0 != 0);
       return 0;
     }
   }
-  else if(a1==0 && !(a1+1==a2))
+  else if(a1 == 0 && !(a1 + 1 == a2))
   { // c*c*
     if(abs_ind == 0)
       return a1;
@@ -240,7 +242,7 @@ size_t concretize_2(size_t abs_ind, size_t a1, size_t a2)
       return nndt_above(a2);
     else
     {
-      assert(0!=0);
+      assert(0 != 0);
       return 0;
     }
   }
@@ -258,7 +260,7 @@ size_t concretize_2(size_t abs_ind, size_t a1, size_t a2)
       return nndt_above(a2);
     else
     {
-      assert(0!=0);
+      assert(0 != 0);
       return 0;
     }
   }
@@ -266,18 +268,18 @@ size_t concretize_2(size_t abs_ind, size_t a1, size_t a2)
 
 int is_precise_2(size_t abs_ind, size_t a1, size_t a2)
 {
-  if(a1==0 && a1+1==a2)
+  if(a1 == 0 && a1 + 1 == a2)
   { // cc*
     return abs_ind == 0 || abs_ind == 1;
   } 
-  else if(!(a1==0) && a1+1==a2)
+  else if(!(a1 == 0) && a1 + 1 == a2)
   { // *cc*
     return abs_ind == 1 || abs_ind == 2;
   }
-  else if(a1==0 && !(a1+1==a2))
+  else if(a1 == 0 && !(a1 + 1 == a2))
   { // c*c*
     return abs_ind == 0 || abs_ind == 2;
-  } 
+  }
   else
   { // *c*c*, !a1==0 && !a1+1==a2
     return abs_ind == 1 || abs_ind == 3;
@@ -287,7 +289,7 @@ int is_precise_2(size_t abs_ind, size_t a1, size_t a2)
 int is_abstract_2(size_t abs_ind, size_t a1, size_t a2)
 {
   int pre = is_precise_2(abs_ind, a1, a2);
-  return(1-pre);
+  return (1 - pre);
 }
 
 // Add a number to an abs_ind
@@ -317,7 +319,7 @@ size_t add_abs_to_conc_2(size_t abs_ind, size_t num, size_t a1, size_t a2)
   //     return(two_abs(conc+num, a1, a2));
   // }
   size_t conc = concretize_2(abs_ind, a1, a2);
-  return two_abs(conc+num, a1, a2);
+  return two_abs(conc + num, a1, a2);
 }
 
 size_t sub_conc_from_abs_2(size_t abs_ind, size_t num, size_t a1, size_t a2)
@@ -343,7 +345,7 @@ size_t sub_conc_from_abs_2(size_t abs_ind, size_t num, size_t a1, size_t a2)
   // }
   size_t conc = concretize_2(abs_ind, a1, a2);
   assert(conc >= num);
-  return two_abs(conc-num, a1, a2);
+  return two_abs(conc - num, a1, a2);
 }
 
 // helper function
@@ -363,17 +365,17 @@ size_t raw_to_real_3(size_t raw_index, size_t a1, size_t a2, size_t a3)
 // c3: 5-(a1==0)-(a1+1==a2)-(a2+1==a3)
 size_t real_to_raw_3(size_t real_index, size_t a1, size_t a2, size_t a3)
 {
-  if(real_index < 1-(a1==0))
+  if(real_index < 1 - (a1 == 0))
     return 0;
   else if(real_index == 1 - (a1 == 0))
     return 1;
-  else if(real_index < 3 - (a1 == 0) - (a1+1 == a2))
+  else if(real_index < 3 - (a1 == 0) - (a1 + 1 == a2))
     return 2;
-  else if(real_index == 3 - (a1 == 0) - (a1+1 == a2))
+  else if(real_index == 3 - (a1 == 0) - (a1 + 1 == a2))
     return 3;
-  else if(real_index < 5 - (a1 == 0) - (a1+1 == a2) - (a2+1 == a3))
+  else if(real_index < 5 - (a1 == 0) - (a1 + 1 == a2) - (a2 + 1 == a3))
     return 4;
-  else if(real_index == 5 - (a1 == 0) - (a1+1 == a2) - (a2+1 == a3))
+  else if(real_index == 5 - (a1 == 0) - (a1 + 1 == a2) - (a2 + 1 == a3))
     return 5;
   else
     return 6;
@@ -431,7 +433,8 @@ int is_precise_3(size_t abs_ind, size_t a1, size_t a2, size_t a3)
 }
 
 // Add a number to an abs_ind
-size_t add_abs_to_conc_3(size_t abs_ind, size_t num, size_t a1, size_t a2, size_t a3)
+size_t
+add_abs_to_conc_3(size_t abs_ind, size_t num, size_t a1, size_t a2, size_t a3)
 {
   if(num == 0)
   {
@@ -439,13 +442,13 @@ size_t add_abs_to_conc_3(size_t abs_ind, size_t num, size_t a1, size_t a2, size_
   }
   else if(num == 1)
   {
-    if (is_precise_3(abs_ind, a1, a2, a3))
+    if(is_precise_3(abs_ind, a1, a2, a3))
     {
       return abs_ind + 1;
     }
     else
     {
-      return (abs_ind > 5 - (a1 == 0) - (a1+1 == a2) - (a2+1 == a3) ||
+      return (abs_ind > 5 - (a1 == 0) - (a1 + 1 == a2) - (a2 + 1 == a3) ||
               nndt_bool())
                ? abs_ind
                : abs_ind + 1;
@@ -454,16 +457,17 @@ size_t add_abs_to_conc_3(size_t abs_ind, size_t num, size_t a1, size_t a2, size_
   else
   {
     size_t conc = concretize_3(abs_ind, a1, a2, a3);
-    return three_abs(conc+num, a1, a2, a3);
+    return three_abs(conc + num, a1, a2, a3);
   }
 }
 
-size_t sub_conc_from_abs_3(size_t abs_ind, size_t num, size_t a1, size_t a2, size_t a3)
+size_t
+sub_conc_from_abs_3(size_t abs_ind, size_t num, size_t a1, size_t a2, size_t a3)
 {
   if(num == 0)
   {
     return abs_ind;
-  } 
+  }
   else if(num == 1)
   {
     if(is_precise_3(abs_ind, a1, a2, a3))
@@ -471,18 +475,18 @@ size_t sub_conc_from_abs_3(size_t abs_ind, size_t num, size_t a1, size_t a2, siz
       if(abs_ind != 0)
         return abs_ind - 1;
       else
-        assert(0 != 0);  // this is to cover the overflow case 0-1
+        assert(0 != 0); // this is to cover the overflow case 0-1
     }
     else
     {
-      return (abs_ind == 0 || nndt_bool()) ? abs_ind: abs_ind - 1;
+      return (abs_ind == 0 || nndt_bool()) ? abs_ind : abs_ind - 1;
     }
   }
   else
   {
     size_t conc = concretize_3(abs_ind, a1, a2, a3);
     assert(conc >= num);
-    return three_abs(conc-num, a1, a2, a3);
+    return three_abs(conc - num, a1, a2, a3);
   }
 }
 
@@ -504,7 +508,7 @@ size_t multiply_abs_with_conc_3(
   else
   {
     size_t conc = concretize_3(abs_ind, a1, a2, a3);
-    return three_abs(abs_ind*num, a1, a2, a3);
+    return three_abs(abs_ind * num, a1, a2, a3);
   }
 }
 
@@ -526,27 +530,28 @@ raw_to_real_4(size_t raw_index, size_t a1, size_t a2, size_t a3, size_t a4)
 // c2: 3-(a1==0)-(a1+1==a2)
 // c3: 5-(a1==0)-(a1+1==a2)-(a2+1==a3)
 // c4: 7-(a1==0)-(a1+1==a2)-(a2+1==a3)-(a3+1==a4)
-size_t real_to_raw_4(size_t real_index, size_t a1, size_t a2, size_t a3, size_t a4)
+size_t
+real_to_raw_4(size_t real_index, size_t a1, size_t a2, size_t a3, size_t a4)
 {
-  if (real_index < 1 - (a1 == 0))
+  if(real_index < 1 - (a1 == 0))
     return 0;
-  else if (real_index == 1 - (a1 == 0))
+  else if(real_index == 1 - (a1 == 0))
     return 1;
-  else if (real_index < 3 - (a1 == 0) - (a1+1 == a2))
+  else if(real_index < 3 - (a1 == 0) - (a1 + 1 == a2))
     return 2;
-  else if (real_index == 3 - (a1 == 0) - (a1+1 == a2))
+  else if(real_index == 3 - (a1 == 0) - (a1 + 1 == a2))
     return 3;
-  else if (real_index < 5 - (a1 == 0) - (a1+1 == a2) - (a2+1 == a3))
+  else if(real_index < 5 - (a1 == 0) - (a1 + 1 == a2) - (a2 + 1 == a3))
     return 4;
-  else if (real_index == 5 - (a1 == 0) - (a1+1 == a2) - (a2+1 == a3))
+  else if(real_index == 5 - (a1 == 0) - (a1 + 1 == a2) - (a2 + 1 == a3))
     return 5;
-  else if (
+  else if(
     real_index <
-    7 - (a1 == 0) - (a1+1 == a2) - (a2+1 == a3) - (a3+1 == a4))
+    7 - (a1 == 0) - (a1 + 1 == a2) - (a2 + 1 == a3) - (a3 + 1 == a4))
     return 6;
-  else if (
+  else if(
     real_index ==
-    7 - (a1 == 0) - (a1+1 == a2) - (a2+1 == a3) - (a3+1 == a4))
+    7 - (a1 == 0) - (a1 + 1 == a2) - (a2 + 1 == a3) - (a3 + 1 == a4))
     return 7;
   else
     return 8;
@@ -557,7 +562,7 @@ size_t real_to_raw_4(size_t real_index, size_t a1, size_t a2, size_t a3, size_t 
 size_t four_abs(size_t index, size_t a1, size_t a2, size_t a3, size_t a4)
 {
   size_t raw_index = 0;
-  if (index < a1)
+  if(index < a1)
     raw_index = 0;
   else if(index == a1)
     raw_index = 1;
@@ -571,7 +576,7 @@ size_t four_abs(size_t index, size_t a1, size_t a2, size_t a3, size_t a4)
     raw_index = 5;
   else if(index > a3 && index < a4)
     raw_index = 6;
-  else if (index == a4)
+  else if(index == a4)
     raw_index = 7;
   else
     raw_index = 8;
@@ -582,9 +587,9 @@ size_t four_abs(size_t index, size_t a1, size_t a2, size_t a3, size_t a4)
 //Shape *c*c*c*c*
 size_t concretize_4(size_t abs_ind, size_t a1, size_t a2, size_t a3, size_t a4)
 {
-  assert(a1<a2);
-  assert(a2<a3);
-  assert(a3<a4);
+  assert(a1 < a2);
+  assert(a2 < a3);
+  assert(a3 < a4);
   size_t raw_index = real_to_raw_4(abs_ind, a1, a2, a3, a4);
   if(raw_index == 0)
     return nndt_under(a1);
@@ -629,26 +634,26 @@ size_t add_abs_to_conc_4(
   if(num == 0)
   {
     return abs_ind;
-  } 
+  }
   else if(num == 1)
   {
-    if (is_precise_4(abs_ind, a1, a2, a3, a4))
+    if(is_precise_4(abs_ind, a1, a2, a3, a4))
     {
       return abs_ind + 1;
     }
     else
     {
-      return (abs_ind > 7 - (a1 == 0) - (a1+1 == a2) - (a2+1 == a3) - 
-                                      (a3+1 == a4) ||
-                             nndt_bool())
-                              ? abs_ind
-                              : abs_ind + 1;
+      return (abs_ind > 7 - (a1 == 0) - (a1 + 1 == a2) - (a2 + 1 == a3) - 
+                                      (a3 + 1 == a4) ||
+              nndt_bool())
+               ? abs_ind
+               : abs_ind + 1;
     }
   }
   else
   {
     size_t conc = concretize_4(abs_ind, a1, a2, a3, a4);
-    return four_abs(conc+num, a1, a2, a3, a4);
+    return four_abs(conc + num, a1, a2, a3, a4);
   }
 }
 // Substract a number from abs_ind
@@ -660,29 +665,29 @@ size_t sub_conc_from_abs_4(
   size_t a3,
   size_t a4)
 {
-  if (num == 0)
+  if(num == 0)
   {
     return abs_ind;
   }
   else if(num == 1)
   {
-    if (is_precise_4(abs_ind, a1, a2, a3, a4))
+    if(is_precise_4(abs_ind, a1, a2, a3, a4))
     {
-      if (abs_ind != 0)
+      if(abs_ind != 0)
         return abs_ind - 1;
       else
-        assert(0 != 0);  // this is to cover the overflow case 0-1
+        assert(0 != 0); // this is to cover the overflow case 0-1
     }
     else
     {
-      return (abs_ind == 0 || nndt_bool()) ? abs_ind: abs_ind - 1;
+      return (abs_ind == 0 || nndt_bool()) ? abs_ind : abs_ind - 1;
     }
   }
   else
   {
     size_t conc = concretize_4(abs_ind, a1, a2, a3, a4);
     assert(conc >= num);
-    return four_abs(conc-num, a1, a2, a3, a4);
+    return four_abs(conc - num, a1, a2, a3, a4);
   }
 }
 
@@ -705,6 +710,6 @@ size_t multiply_abs_with_conc_4(
   else
   {
     size_t conc = concretize_4(abs_ind, a1, a2, a3, a4);
-    return four_abs(abs_ind*num, a1, a2, a3, a4);
+    return four_abs(abs_ind * num, a1, a2, a3, a4);
   }
 }

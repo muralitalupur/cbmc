@@ -97,7 +97,7 @@ public:
     indent_str(etype, depth);
 
     if(operands().empty())
-      return(etype);
+      return (etype);
     else
     {
       std::string res;

@@ -1,12 +1,12 @@
-#include <stdlib.h>
 #include <assert.h>
+#include <stdlib.h>
 
 #define MAX_LEN 100
 
 void main()
 {
-  char * a1;
-  char * a2;
+  char *a1;
+  char *a2;
   size_t a1_len;
   size_t a2_len;
   size_t i = 0;
@@ -25,6 +25,6 @@ void main()
     i++;
   }
   // This assertion is false, should lead to CBMC finding a counter example
-  assert(sum < 0); 
+  assert(sum < 0);
   return;
 }

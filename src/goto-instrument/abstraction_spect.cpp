@@ -39,10 +39,7 @@ abstraction_spect::abstraction_spect(
     spec.set_spect_index(spec_index);
 
     // we assume all entries in json file belong to the same function
-    function =
-      entry_obj.find("function")
-        ->second
-        .value;
+    function = entry_obj.find("function")->second.value;
     // insert the entity
     spec.insert_entity(
       entry_obj.find("name")->second.value,
@@ -64,10 +61,9 @@ abstraction_spect::abstraction_spect(
       to_json_object(entry_obj.find("abst-functions")->second)
         .find("add-abs-conc")
         ->second.value);
-    spec.set_minus_func(
-      to_json_object(entry_obj.find("abst-functions")->second)
-        .find("sub-abs-conc")
-        ->second.value);
+    spec.set_minus_func(to_json_object(entry_obj.find("abst-functions")->second)
+                          .find("sub-abs-conc")
+                         ->second.value);
     spec.set_precise_func(
       to_json_object(entry_obj.find("abst-functions")->second)
         .find("precise-check")
@@ -131,10 +127,10 @@ abstraction_spect::spect abstraction_spect::spect::update_abst_spec(
   for(const auto &name : abst_array_ids)
   {
     if(
-       std::string(abst_arrays.at(name).entity_name().c_str())
-         .rfind(old_function.c_str(), 0) ==
-       0) // erase the old entity if it's not a global variable
-       new_spec.abst_arrays.erase(name);
+      std::string(abst_arrays.at(name).entity_name().c_str())
+        .rfind(old_function.c_str(), 0) ==
+      0) // erase the old entity if it's not a global variable
+      new_spec.abst_arrays.erase(name);
     if(_name_pairs.find(name) != _name_pairs.end())
     {
       // This array needs to be updated

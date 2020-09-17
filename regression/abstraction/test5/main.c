@@ -1,18 +1,19 @@
-#include <stdlib.h>
 #include <assert.h>
 #include <stdbool.h>
+#include <stdlib.h>
 
 #define MAX_LEN 100
 
 // Compares if two arrays are the same (sort of)
-bool foo(char* a1, size_t a1_len, char* a2, size_t a2_len)
+bool foo(char *a1, size_t a1_len, char *a2, size_t a2_len)
 {
   bool res = true;
   if(a1_len == a2_len)
   {
     for(size_t i=0; i < a1_len; i++)
     {
-      if(a2[i] != a1[i]) res &= false;
+      if(a2[i] != a1[i])
+        res &= false;
     }
     return res;
   }
@@ -25,8 +26,8 @@ bool foo(char* a1, size_t a1_len, char* a2, size_t a2_len)
 
 void main()
 {
-  const char * a1;
-  const char * a2;
+  const char *a1;
+  const char *a2;
   size_t a1_len;
   size_t a2_len;
   // CBMC will choose i non-deterministically

@@ -96,9 +96,10 @@ std::string get_absolute_path(const std::string &rel_path)
   free(wd);
 #else
   TCHAR buffer[4096];
-  DWORD retval = GetFullPathName(rel_path.c_str(), 4096, buffer, "") if(
-    retval ==
-    0) throw system_exceptiont("failed to get current directory of process");
+  DWORD retval = GetFullPathName(
+    utf8_to_utf16_native_endian(rel_path).c_str(), 4096, buffer, "");
+  if(retval == 0)
+    throw system_exceptiont("failed to get current directory of process");
 
 #  ifdef UNICODE
   std::string abs_path(narrow(buffer));

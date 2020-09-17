@@ -1154,6 +1154,7 @@ void cbmc_parse_optionst::help()
     "                              collect the solver query complexity\n"
     // NOLINTNEXTLINE(whitespace/line_length)
     " --use-abstraction abstraction-file\n"
+    // NOLINTNEXTLINE(whitespace/line_length)
     "                              abstract the program as specified in the abstraction-file"
     "\n";
   // clang-format on

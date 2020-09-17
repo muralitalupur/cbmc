@@ -144,7 +144,7 @@ abstraction_spect::spect abstraction_spect::spect::update_abst_spec(
       std::string(abst_indices.at(name).entity_name().c_str())
         .rfind(old_function.c_str(), 0) ==
       0) // erase the old entity if it's not a global variable
-        new_spec.abst_indices.erase(name);
+      new_spec.abst_indices.erase(name);
     if(_name_pairs.find(name) != _name_pairs.end())
     {
       // This index variable needs to be updated

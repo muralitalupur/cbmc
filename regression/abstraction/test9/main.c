@@ -35,7 +35,7 @@ bool main()
   a1_len = a2_len;
 
   // assignment of the full array.
-  // a2's spec has to be copied over for a1 as well.  
+  // a2's spec has to be copied over for a1 as well.
   a1 = a2;
 
   if(search(a1, a1_len, key))

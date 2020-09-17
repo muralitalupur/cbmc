@@ -133,7 +133,7 @@ size_t sub_conc_from_abs_1(size_t abs_ind, size_t num, size_t a1)
     // We can always write an explicit abstraction like we did for num = 1.
     size_t conc = concretize_1(abs_ind, a1);
     assert(conc >= num);
-    return(one_abs(conc - num, a1));
+    return (one_abs(conc - num, a1));
   }
 }
 
@@ -643,7 +643,7 @@ size_t add_abs_to_conc_4(
     }
     else
     {
-      return (abs_ind > 7 - (a1 == 0) - (a1 + 1 == a2) - (a2 + 1 == a3) - 
+      return (abs_ind > 7 - (a1 == 0) - (a1 + 1 == a2) - (a2 + 1 == a3) -
                           (a3 + 1 == a4) ||
               nndt_bool())
                ? abs_ind

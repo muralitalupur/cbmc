@@ -46,7 +46,7 @@ for test in ${ABSTRACTION_TESTS[@]}; do
 
     for spec in "$test"/*.json; do
         # run goto-instrument to make abstracted goto-programs
-        $GOTO_INSTRUMENT --use-abstraction $spec \
+        $GOTO_INSTRUMENT --use-rra $spec \
             $test/main.goto \
             $test/main_abst.goto
         # check the program

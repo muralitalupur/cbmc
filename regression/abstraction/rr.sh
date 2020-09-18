@@ -26,7 +26,7 @@ $GOTO_CC -o main.goto main.c
 echo "Goto programs built"
 
 #touch main_abst.goto
-$GOTO_INSTRUMENT --use-abstraction spec.json main.goto main-abst.goto
+$GOTO_INSTRUMENT --use-rra spec.json main.goto main-abst.goto
 echo "Goto-abst program built"
 # check the program
 if [ $CHECK = true ]; then

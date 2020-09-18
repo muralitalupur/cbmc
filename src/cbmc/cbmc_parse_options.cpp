@@ -475,9 +475,9 @@ void cbmc_parse_optionst::get_command_line_options(optionst &options)
       "write-solver-stats-to", cmdline.get_value("write-solver-stats-to"));
   }
 
-  if(cmdline.isset("use-abstraction"))
+  if(cmdline.isset("use-rra"))
   {
-    options.set_option("use-abstraction", cmdline.get_value("use-abstraction"));
+    options.set_option("use-rra", cmdline.get_value("use-rra"));
   }
 
   if(cmdline.isset("beautify"))
@@ -805,9 +805,9 @@ int cbmc_parse_optionst::get_goto_program(
 
   goto_model = initialize_goto_model(cmdline.args, ui_message_handler, options);
 
-  if(cmdline.isset("use-abstraction"))
+  if(cmdline.isset("use-rra"))
   {
-    std::string abst_file = options.get_option("use-abstraction");
+    std::string abst_file = options.get_option("use-rra");
 
     abstraction_spect abst_info(abst_file, ui_message_handler);
 
@@ -1153,7 +1153,7 @@ void cbmc_parse_optionst::help()
     " --write-solver-stats-to json-file\n"
     "                              collect the solver query complexity\n"
     // NOLINTNEXTLINE(whitespace/line_length)
-    " --use-abstraction abstraction-file\n"
+    " --use-rra abstraction-file\n"
     // NOLINTNEXTLINE(whitespace/line_length)
     "                              abstract the program as specified in the abstraction-file"
     "\n";

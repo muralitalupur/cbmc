@@ -1904,8 +1904,8 @@ void goto_instrument_parse_optionst::help()
     " --value-set-fi-fp-removal    build flow-insensitive value set and replace function pointers by a case statement\n" // NOLINT(*)
     "                              over the possible assignments. If the set of possible assignments is empty the function pointer\n" // NOLINT(*)
     "                              is removed using the standard remove-function-pointers pass. \n" // NOLINT(*)
-   // NOLINTNEXTLINE(whitespace/line_length)
-    " --use-abstraction <file>     abstract given arrays specified in the json file\n"
+    // NOLINTNEXTLINE(whitespace/line_length)
+    " --use-rra <file>             apply rr-abstraction to the arrays specified in the json file\n"
     HELP_RESTRICT_FUNCTION_POINTER
     HELP_REMOVE_CALLS_NO_BODY
     HELP_REMOVE_CONST_FUNCTION_POINTERS

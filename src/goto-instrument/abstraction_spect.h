@@ -7,8 +7,8 @@ Authors: Murali Talupur, talupur@amazon.com
 
 \*******************************************************************/
 
-#ifndef CPROVER_GOTO_INSTRUMENT_ABSTRACTION_ABSTSPECT_H
-#define CPROVER_GOTO_INSTRUMENT_ABSTRACTION_ABSTSPECT_H
+#ifndef CPROVER_GOTO_INSTRUMENT_ABSTRACTION_SPECT_H
+#define CPROVER_GOTO_INSTRUMENT_ABSTRACTION_SPECT_H
 
 #include <limits>
 #include <list>

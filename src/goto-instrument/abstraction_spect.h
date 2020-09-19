@@ -7,8 +7,8 @@ Authors: Murali Talupur, talupur@amazon.com
 
 \*******************************************************************/
 
-#ifndef CPROVER_GOTO_INSTRUMENT_ABSTRACTION_ABSTSPECT_H
-#define CPROVER_GOTO_INSTRUMENT_ABSTRACTION_ABSTSPECT_H
+#ifndef CPROVER_GOTO_INSTRUMENT_ABSTRACTION_SPECT_H
+#define CPROVER_GOTO_INSTRUMENT_ABSTRACTION_SPECT_H
 
 #include <limits>
 #include <list>
@@ -109,7 +109,8 @@ public:
     {
       // Name of the array/list being abstracted
       irep_idt
-        name; // Should be in the id format: function::x::name, this is the unique identifier
+        // Should be in the id format: function::x::name, the unique identifier
+        name;
       std::string name_of_abst;
 
     public:
@@ -161,9 +162,10 @@ public:
     // Shape of the abstraction
     abst_shapet shape;
 
-    // Abstraction functions follow. These should be defined in the abstraction_funcs_file or
-    // they are hard-coded ones. In abstraction_funcs_file function will begin with prefixes
-    // such as is_precise, compare_indices,... followed by the some shape identifier.
+    // Abstraction functions follow.
+    // These should be defined in the abst_funcs_file or hard-coded.
+    // In abst_funcs_file function will begin with prefixes such as
+    // is_precise, compare_indices etc plus some shape identifier.
 
     // Says if an index into the abstracted entity is precisely tracked or not.
     irep_idt is_precise_func;
@@ -356,11 +358,16 @@ public:
     {
       spect_index = _index;
     }
-    // We need to update the abstracted array/list/var names as we cross the function boundary.
-    // For example, if function Foo has two arrays f1 and f2 that are abstracted.
-    // Function Bar is defined as void Bar(array b1, array b2) and suppose Foo calls Bar(f1,f2).
-    // Abst_spec in Foo will contain f1, f2. These should be renamed to b1, b2 to obtain abst_spec for Bar.
-    // The argument for the following function would be Foo, Bar, {f1: b1, f2: b2}
+    // We need to update the abstracted array/list/var names as we cross
+    // the function boundary.
+    // For example, if function Foo has two arrays f1 and f2
+    // that are abstracted.
+    // Function Bar is defined as void Bar(array b1, array b2) and
+    // suppose Foo calls Bar(f1,f2).
+    // Abst_spec in Foo will contain f1, f2. These should be renamed to
+    // b1, b2 to obtain abst_spec for Bar.
+    // The argument for the following function would be Foo, Bar,
+    // {f1: b1, f2: b2}
     // Return a new spect reflecting the changes
     spect update_abst_spec(
       irep_idt old_function,
@@ -424,7 +431,8 @@ public:
     return false;
   }
 
-  // return the spect that has the entity, should always run has_index_entity before running this function
+  // return the spect that has the entity,
+  // should always run has_index_entity before running this function
   const spect &get_spec_for_index_entity(const irep_idt &entity_name) const
   {
     for(const spect &spec : specs)
@@ -435,7 +443,8 @@ public:
     throw "entity " + std::string(entity_name.c_str()) + " not found";
   }
 
-  // return the spect that has the entity, should always run has_array_entity before running this function
+  // return the spect that has the entity,
+  // should always run has_array_entity before running this function
   const spect &get_spec_for_array_entity(const irep_idt &entity_name) const
   {
     for(const spect &spec : specs)

@@ -1817,6 +1817,7 @@ void goto_instrument_parse_optionst::help()
     " --show-safe-dereferences     show pointer expressions that are trivially dominated by a not-null check\n" // NOLINT(*)
     "                              *and* used as a dereference operand\n" // NOLINT(*)
     " --show-index-exprs array_name\n"
+    // NOLINTNEXTLINE(whitespace/line_length)
     "                              show expressions that index into the target array\n"
     HELP_VALIDATE
     // NOLINTNEXTLINE(whitespace/line_length)
@@ -1903,7 +1904,8 @@ void goto_instrument_parse_optionst::help()
     " --value-set-fi-fp-removal    build flow-insensitive value set and replace function pointers by a case statement\n" // NOLINT(*)
     "                              over the possible assignments. If the set of possible assignments is empty the function pointer\n" // NOLINT(*)
     "                              is removed using the standard remove-function-pointers pass. \n" // NOLINT(*)
-    " --use-abstraction <file>     abstract given arrays specified in the json file\n"
+    // NOLINTNEXTLINE(whitespace/line_length)
+    " --use-rra <file>             apply rr-abstraction to the arrays specified in the json file\n"
     HELP_RESTRICT_FUNCTION_POINTER
     HELP_REMOVE_CALLS_NO_BODY
     HELP_REMOVE_CONST_FUNCTION_POINTERS

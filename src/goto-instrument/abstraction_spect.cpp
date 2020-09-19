@@ -63,7 +63,7 @@ abstraction_spect::abstraction_spect(
         ->second.value);
     spec.set_minus_func(to_json_object(entry_obj.find("abst-functions")->second)
                           .find("sub-abs-conc")
-                         ->second.value);
+                          ->second.value);
     spec.set_precise_func(
       to_json_object(entry_obj.find("abst-functions")->second)
         .find("precise-check")
@@ -141,10 +141,10 @@ abstraction_spect::spect abstraction_spect::spect::update_abst_spec(
   for(const auto &name : abst_index_ids)
   {
     if(
-       std::string(abst_indices.at(name).entity_name().c_str())
-         .rfind(old_function.c_str(), 0) ==
-        0) // erase the old entity if it's not a global variable
-        new_spec.abst_indices.erase(name);
+      std::string(abst_indices.at(name).entity_name().c_str())
+        .rfind(old_function.c_str(), 0) ==
+      0) // erase the old entity if it's not a global variable
+      new_spec.abst_indices.erase(name);
     if(_name_pairs.find(name) != _name_pairs.end())
     {
       // This index variable needs to be updated
@@ -205,7 +205,8 @@ abstraction_spect::spect::get_assumption_exprs(const namespacet &ns) const
   return shape.get_assumption_exprs(ns, spect_index);
 }
 
-// this is a re-write of ansi_c_languaget::to_expr to add the prefix before the variable name
+// this is a re-write of ansi_c_languaget::to_expr
+// to add the prefix before the variable name
 bool shape_assumption_to_expr(
   const std::string &code,
   const std::string &module,

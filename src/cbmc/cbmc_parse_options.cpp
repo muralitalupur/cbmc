@@ -76,8 +76,6 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <goto-instrument/nondet_static.h>
 #include <goto-instrument/reachability_slicer.h>
 
-#include <goto-instrument/abstraction_spect.h>
-
 #include <goto-symex/path_storage.h>
 
 #include <pointer-analysis/add_failed_symbols.h>
@@ -804,21 +802,6 @@ int cbmc_parse_optionst::get_goto_program(
   }
 
   goto_model = initialize_goto_model(cmdline.args, ui_message_handler, options);
-
-  if(cmdline.isset("use-rra"))
-  {
-    std::string abst_file = options.get_option("use-rra");
-
-    abstraction_spect abst_info(abst_file, ui_message_handler);
-
-    std::vector<std::string> abstfiles =
-      abst_info.get_abstraction_function_files();
-
-    goto_modelt goto_model_for_abst_fns =
-      initialize_goto_model(abstfiles, ui_message_handler, options);
-
-    link_goto_model(goto_model, goto_model_for_abst_fns, ui_message_handler);
-  }
 
   if(cmdline.isset("show-symbol-table"))
   {

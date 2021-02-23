@@ -122,12 +122,15 @@ void constant_propagator_domaint::assign_rec(
 
 void constant_propagator_domaint::transform(
   const irep_idt &function_from,
-  locationt from,
+  trace_ptrt trace_from,
   const irep_idt &function_to,
-  locationt to,
+  trace_ptrt trace_to,
   ai_baset &ai,
   const namespacet &ns)
 {
+  locationt from{trace_from->current_location()};
+  locationt to{trace_to->current_location()};
+
 #ifdef DEBUG
   std::cout << "Transform from/to:\n";
   std::cout << from->location_number << " --> "
@@ -738,8 +741,8 @@ void constant_propagator_ait::replace(
   goto_functionst &goto_functions,
   const namespacet &ns)
 {
-  Forall_goto_functions(f_it, goto_functions)
-    replace(f_it->second, ns);
+  for(auto &gf_entry : goto_functions.function_map)
+    replace(gf_entry.second, ns);
 }
 
 

@@ -13,6 +13,8 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <set>
 
 #include <util/arith_tools.h>
+#include <util/bitvector_expr.h>
+#include <util/floatbv_expr.h>
 #include <util/magic.h>
 #include <util/mp_arith.h>
 #include <util/prefix.h>
@@ -28,89 +30,6 @@ Author: Daniel Kroening, kroening@kroening.com
 
 #include <solvers/floatbv/float_utils.h>
 #include <solvers/lowering/expr_lowering.h>
-
-bool boolbvt::literal(
-  const exprt &expr,
-  const std::size_t bit,
-  literalt &dest) const
-{
-  if(expr.type().id()==ID_bool)
-  {
-    INVARIANT(
-      bit == 0,
-      "boolean expressions shall be represented by a single bit and hence the "
-      "only valid bit index is 0");
-    return prop_conv_solvert::literal(to_symbol_expr(expr), dest);
-  }
-  else
-  {
-    if(expr.id()==ID_symbol ||
-       expr.id()==ID_nondet_symbol)
-    {
-      const irep_idt &identifier=expr.get(ID_identifier);
-
-      boolbv_mapt::mappingt::const_iterator it_m=
-        map.mapping.find(identifier);
-
-      if(it_m==map.mapping.end())
-        return true;
-
-      const boolbv_mapt::map_entryt &map_entry=it_m->second;
-
-      INVARIANT(
-        bit < map_entry.literal_map.size(), "bit index shall be within bounds");
-      if(!map_entry.literal_map[bit].is_set)
-        return true;
-
-      dest=map_entry.literal_map[bit].l;
-      return false;
-    }
-    else if(expr.id()==ID_index)
-    {
-      const index_exprt &index_expr=to_index_expr(expr);
-
-      std::size_t element_width=boolbv_width(index_expr.type());
-      CHECK_RETURN(element_width != 0);
-
-      const auto &index = index_expr.index();
-      PRECONDITION(index.id() == ID_constant);
-      mp_integer index_int =
-        numeric_cast_v<mp_integer>(to_constant_expr(index));
-
-      std::size_t offset =
-        numeric_cast_v<std::size_t>(index_int * element_width);
-
-      return literal(index_expr.array(), bit+offset, dest);
-    }
-    else if(expr.id()==ID_member)
-    {
-      const member_exprt &member_expr=to_member_expr(expr);
-
-      const struct_typet::componentst &components=
-        to_struct_type(expr.type()).components();
-      const irep_idt &component_name=member_expr.get_component_name();
-
-      std::size_t offset=0;
-
-      for(const auto &c : components)
-      {
-        const typet &subtype = c.type();
-
-        if(c.get_name() == component_name)
-          return literal(member_expr.struct_op(), bit + offset, dest);
-
-        std::size_t element_width=boolbv_width(subtype);
-        CHECK_RETURN(element_width != 0);
-
-        offset+=element_width;
-      }
-
-      INVARIANT(false, "struct type should have accessed component");
-    }
-  }
-
-  INVARIANT(false, "expression should have a corresponding literal");
-}
 
 /// Convert expression to vector of literalts, using an internal
 /// cache to speed up conversion if available. Also assert the resultant
@@ -129,24 +48,22 @@ boolbvt::convert_bv(const exprt &expr, optionalt<std::size_t> expected_width)
   // Iterators into hash_maps supposedly stay stable
   // even though we are inserting more elements recursively.
 
-  const bvt &bv = convert_bitvector(expr);
+  cache_result.first->second = convert_bitvector(expr);
 
   INVARIANT_WITH_DIAGNOSTICS(
-    !expected_width || bv.size() == *expected_width,
+    !expected_width || cache_result.first->second.size() == *expected_width,
     "bitvector width shall match the indicated expected width",
     expr.find_source_location(),
     irep_pretty_diagnosticst(expr));
 
-  cache_result.first->second = bv;
-
   // check
-  forall_literals(it, cache_result.first->second)
+  for(const auto &literal : cache_result.first->second)
   {
-    if(freeze_all && !it->is_constant())
-      prop.set_frozen(*it);
+    if(freeze_all && !literal.is_constant())
+      prop.set_frozen(literal);
 
     INVARIANT_WITH_DIAGNOSTICS(
-      it->var_no() != literalt::unused_var_no(),
+      literal.var_no() != literalt::unused_var_no(),
       "variable number must be different from the unused variable number",
       expr.find_source_location(),
       irep_pretty_diagnosticst(expr));
@@ -383,31 +300,20 @@ bvt boolbvt::convert_symbol(const exprt &expr)
   const typet &type=expr.type();
   std::size_t width=boolbv_width(type);
 
-  bvt bv;
-  bv.resize(width);
-
   const irep_idt &identifier = expr.get(ID_identifier);
   CHECK_RETURN(!identifier.empty());
 
-  if(width==0)
-  {
-    // just put in map
-    map.get_map_entry(identifier, type);
-  }
-  else
-  {
-    map.get_literals(identifier, type, width, bv);
+  bvt bv = map.get_literals(identifier, type, width);
 
-    INVARIANT_WITH_DIAGNOSTICS(
-      std::all_of(
-        bv.begin(),
-        bv.end(),
-        [this](const literalt &l) {
-          return l.var_no() < prop.no_variables() || l.is_constant();
-        }),
-      "variable number of non-constant literals should be within bounds",
-      id2string(identifier));
-  }
+  INVARIANT_WITH_DIAGNOSTICS(
+    std::all_of(
+      bv.begin(),
+      bv.end(),
+      [this](const literalt &l) {
+        return l.var_no() < prop.no_variables() || l.is_constant();
+      }),
+    "variable number of non-constant literals should be within bounds",
+    id2string(identifier));
 
   return bv;
 }
@@ -563,6 +469,11 @@ literalt boolbvt::convert_rest(const exprt &expr)
     else if(op.type().id() == ID_fixedbv)
       return const_literal(true);
   }
+  else if(expr.id() == ID_function_application)
+  {
+    functions.record(to_function_application_expr(expr));
+    return prop.new_variable();
+  }
 
   return SUB::convert_rest(expr);
 }
@@ -653,8 +564,7 @@ bool boolbvt::is_unbounded_array(const typet &type) const
 void boolbvt::print_assignment(std::ostream &out) const
 {
   arrayst::print_assignment(out);
-  for(const auto &pair : map.mapping)
-    out << pair.first << "=" << pair.second.get_value(prop) << '\n';
+  map.show(out);
 }
 
 boolbvt::offset_mapt boolbvt::build_offset_map(const struct_typet &src)

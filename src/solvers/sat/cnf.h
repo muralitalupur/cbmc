@@ -55,13 +55,15 @@ protected:
 
   size_t _no_variables;
 
-  bool process_clause(const bvt &bv, bvt &dest);
+  bool process_clause(const bvt &bv, bvt &dest) const;
 
   static bool is_all(const bvt &bv, literalt l)
   {
-    forall_literals(it, bv)
-      if(*it!=l)
+    for(const auto &literal : bv)
+    {
+      if(literal != l)
         return false;
+    }
     return true;
   }
 };

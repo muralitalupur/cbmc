@@ -33,9 +33,11 @@ void convert(const bvt &bv, Minisat::vec<Minisat::Lit> &dest)
     bv.size() <= static_cast<std::size_t>(std::numeric_limits<int>::max()));
   dest.capacity(static_cast<int>(bv.size()));
 
-  forall_literals(it, bv)
-    if(!it->is_false())
-      dest.push(Minisat::mkLit(it->var_no(), it->sign()));
+  for(const auto &literal : bv)
+  {
+    if(!literal.is_false())
+      dest.push(Minisat::mkLit(literal.var_no(), literal.sign()));
+  }
 }
 
 template<typename T>
@@ -120,14 +122,15 @@ void satcheck_minisat2_baset<T>::lcnf(const bvt &bv)
   {
     add_variables();
 
-    forall_literals(it, bv)
+    for(const auto &literal : bv)
     {
-      if(it->is_true())
+      if(literal.is_true())
         return;
-      else if(!it->is_false())
+      else if(!literal.is_false())
       {
         INVARIANT(
-          it->var_no() < (unsigned)solver->nVars(), "variable not added yet");
+          literal.var_no() < (unsigned)solver->nVars(),
+          "variable not added yet");
       }
     }
 
@@ -140,8 +143,23 @@ void satcheck_minisat2_baset<T>::lcnf(const bvt &bv)
 
     solver->addClause_(c);
 
-    with_solver_hardness(
-      [&bv](solver_hardnesst &hardness) { hardness.register_clause(bv); });
+    with_solver_hardness([this, &bv](solver_hardnesst &hardness) {
+      // To map clauses to lines of program code, track clause indices in the
+      // dimacs cnf output. Dimacs output is generated after processing
+      // clauses to remove duplicates and clauses that are trivially true.
+      // Here, a clause is checked to see if it can be thus eliminated. If
+      // not, add the clause index to list of clauses in
+      // solver_hardnesst::register_clause().
+      static size_t cnf_clause_index = 0;
+      bvt cnf;
+      bool clause_removed = process_clause(bv, cnf);
+
+      if(!clause_removed)
+        cnf_clause_index++;
+
+      hardness.register_clause(bv, cnf, cnf_clause_index, !clause_removed);
+    });
+
     clause_counter++;
   }
   catch(const Minisat::OutOfMemoryException &)

@@ -12,10 +12,11 @@ Author: Daniel Kroening, kroening@kroening.com
 #include "goto_program_dereference.h"
 
 #include <util/expr_util.h>
+#include <util/options.h>
+#include <util/pointer_expr.h>
 #include <util/simplify_expr.h>
 #include <util/std_code.h>
 #include <util/symbol_table.h>
-#include <util/options.h>
 
 /// \param expr: expression to check
 /// \return pointer to appropriate failed symbol for \p expr, or nullptr if none
@@ -123,17 +124,6 @@ void goto_program_dereferencet::dereference_rec(exprt &expr)
       tmp2.swap(expr);
     }
   }
-}
-
-/// Gets the value set corresponding to the current target and
-/// expression `expr`.
-/// \param expr: an expression
-/// \param [out] dest: gets the value set
-void goto_program_dereferencet::get_value_set(
-  const exprt &expr,
-  value_setst::valuest &dest) const
-{
-  value_sets.get_values(current_function, current_target, expr, dest);
 }
 
 /// Gets the value set corresponding to the current target and
@@ -294,8 +284,8 @@ void remove_pointers(
     goto_program_dereference(
       ns, goto_model.symbol_table, options, value_sets);
 
-  Forall_goto_functions(it, goto_model.goto_functions)
-    goto_program_dereference.dereference_program(it->second.body);
+  for(auto &gf_entry : goto_model.goto_functions.function_map)
+    goto_program_dereference.dereference_program(gf_entry.second.body);
 }
 
 /// Remove dereferences in `expr` using `value_sets` to determine to what

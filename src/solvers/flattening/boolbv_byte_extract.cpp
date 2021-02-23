@@ -8,19 +8,16 @@ Author: Daniel Kroening, kroening@kroening.com
 
 #include "boolbv.h"
 
-#include <cassert>
-
 #include <util/arith_tools.h>
 #include <util/byte_operators.h>
 #include <util/expr_util.h>
+#include <util/pointer_expr.h>
 #include <util/pointer_offset_size.h>
 #include <util/std_expr.h>
 
 #include <solvers/lowering/expr_lowering.h>
 
-#include "bv_endianness_map.h"
-
-bvt map_bv(const bv_endianness_mapt &map, const bvt &src)
+bvt map_bv(const endianness_mapt &map, const bvt &src)
 {
   PRECONDITION(map.number_of_bits() == src.size());
   bvt result;
@@ -102,11 +99,11 @@ bvt boolbvt::convert_byte_extract(const byte_extract_exprt &expr)
   const bool little_endian = expr.id() == ID_byte_extract_little_endian;
 
   // first do op0
-  const bv_endianness_mapt op_map(op.type(), little_endian, ns, boolbv_width);
+  const endianness_mapt op_map = endianness_map(op.type(), little_endian);
   const bvt op_bv=map_bv(op_map, convert_bv(op));
 
   // do result
-  bv_endianness_mapt result_map(expr.type(), little_endian, ns, boolbv_width);
+  endianness_mapt result_map = endianness_map(expr.type(), little_endian);
   bvt bv;
   bv.resize(width);
 
@@ -122,7 +119,7 @@ bvt boolbvt::convert_byte_extract(const byte_extract_exprt &expr)
       if(offset + i < 0 || offset + i >= op_bv.size())
         bv[i]=prop.new_variable();
       else
-        bv[i] = op_bv[numeric_cast_v<std::size_t>(offset) + i];
+        bv[i] = op_bv[numeric_cast_v<std::size_t>(offset + i)];
   }
   else
   {

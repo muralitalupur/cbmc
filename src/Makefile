@@ -87,7 +87,8 @@ goto-diff.dir: languages goto-programs.dir pointer-analysis.dir \
 
 goto-cc.dir: languages goto-programs.dir linking.dir
 
-memory-analyzer.dir: util.dir goto-programs.dir ansi-c.dir
+memory-analyzer.dir: util.dir goto-programs.dir langapi.dir linking.dir \
+	                   ansi-c.dir
 
 symtab2gb.dir: util.dir goto-programs.dir langapi.dir linking.dir \
                json.dir json-symtab-language.dir
@@ -114,7 +115,7 @@ $(patsubst %, %_clean, $(DIRS)):
 
 # minisat2 and glucose download, for your convenience
 
-DOWNLOADER = lwp-download
+DOWNLOADER = curl -L --remote-name
 TAR = tar
 
 minisat2-download:
@@ -151,16 +152,17 @@ glucose-download:
 	@(cd ../glucose-syrup; patch -p1 < ../scripts/glucose-syrup-patch)
 	@rm glucose-syrup.tgz
 
-cadical_release = rel-06w
+cadical_release = rel-1.3.0
 cadical-download:
 	@echo "Downloading CaDiCaL $(cadical_release)"
-	@curl -L https://github.com/arminbiere/cadical/archive/$(cadical_release).tar.gz | tar xz
+	@$(DOWNLOADER) https://github.com/arminbiere/cadical/archive/$(cadical_release).tar.gz
+	@$(TAR) xfz $(cadical_release).tar.gz
 	@rm -Rf ../cadical
 	@mv cadical-$(cadical_release) ../cadical
-	@(cd ../cadical; patch -p1 < ../scripts/cadical-patch)
-	@cd ../cadical && CXX=$(CXX) CXXFLAGS=-O3 ./configure --debug && make
+	@cd ../cadical && CXX=$(CXX) ./configure -O3 -s -j && make
+	@$(RM) $(cadical_release).tar.gz
 
 doc :
 	doxygen
 
-.PHONY: ipasir-build minisat2-download glucose-download
+.PHONY: minisat2-download cudd-download glucose-download cadical-download

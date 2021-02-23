@@ -16,6 +16,7 @@ Author: Kareem Khazem <karkhaz@karkhaz.com>, 2017
 #include <util/c_types.h>
 #include <util/expr_initializer.h>
 #include <util/magic.h>
+#include <util/pointer_expr.h>
 #include <util/run.h>
 #include <util/tempfile.h>
 
@@ -25,16 +26,28 @@ Author: Kareem Khazem <karkhaz@karkhaz.com>, 2017
 
 #include <goto-programs/read_goto_binary.h>
 
+#include "compile.h"
+
 int linker_script_merget::add_linker_script_definitions()
 {
   if(!cmdline.isset('T'))
     return 0;
 
+  auto original_goto_model =
+    read_goto_binary(goto_binary, log.get_message_handler());
+
+  if(!original_goto_model.has_value())
+  {
+    log.error() << "Unable to read goto binary for linker script merging"
+                << messaget::eom;
+    return 1;
+  }
+
   temporary_filet linker_def_outfile("goto-cc-linker-info", ".json");
   std::list<irep_idt> linker_defined_symbols;
   int fail = get_linker_script_data(
     linker_defined_symbols,
-    compiler.goto_model.symbol_table,
+    original_goto_model->symbol_table,
     elf_binary,
     linker_def_outfile());
   // ignore linker script parsing failures until the code is tested more widely
@@ -42,28 +55,19 @@ int linker_script_merget::add_linker_script_definitions()
     return 0;
 
   jsont data;
-  fail=parse_json(linker_def_outfile(), get_message_handler(), data);
+  fail = parse_json(linker_def_outfile(), log.get_message_handler(), data);
   if(fail!=0)
   {
-    error() << "Problem parsing linker script JSON data" << eom;
+    log.error() << "Problem parsing linker script JSON data" << messaget::eom;
     return fail;
   }
 
   fail=linker_data_is_malformed(data);
   if(fail!=0)
   {
-    error() << "Malformed linker-script JSON document" << eom;
-    data.output(error());
+    log.error() << "Malformed linker-script JSON document" << messaget::eom;
+    data.output(log.error());
     return fail;
-  }
-
-  auto original_goto_model =
-    read_goto_binary(goto_binary, get_message_handler());
-
-  if(!original_goto_model.has_value())
-  {
-    error() << "Unable to read goto binary for linker script merging" << eom;
-    return 1;
   }
 
   fail=1;
@@ -72,8 +76,8 @@ int linker_script_merget::add_linker_script_definitions()
     original_goto_model->goto_functions.function_map.find(INITIALIZE_FUNCTION);
   if(pair == original_goto_model->goto_functions.function_map.end())
   {
-    error() << "No " << INITIALIZE_FUNCTION << " found in goto_functions"
-            << eom;
+    log.error() << "No " << INITIALIZE_FUNCTION << " found in goto_functions"
+                << messaget::eom;
     return fail;
   }
   fail = ls_data2instructions(
@@ -84,7 +88,8 @@ int linker_script_merget::add_linker_script_definitions()
     linker_values);
   if(fail!=0)
   {
-    error() << "Could not add linkerscript defs to " INITIALIZE_FUNCTION << eom;
+    log.error() << "Could not add linkerscript defs to " INITIALIZE_FUNCTION
+                << messaget::eom;
     return fail;
   }
 
@@ -99,29 +104,35 @@ int linker_script_merget::add_linker_script_definitions()
 
   if(fail!=0)
   {
-    error() << "Could not pointerize all linker-defined expressions" << eom;
+    log.error() << "Could not pointerize all linker-defined expressions"
+                << messaget::eom;
     return fail;
   }
 
-  fail = compiler.write_bin_object_file(goto_binary, *original_goto_model);
+  fail = compilet::write_bin_object_file(
+    goto_binary,
+    *original_goto_model,
+    cmdline.isset("validate-goto-model"),
+    log.get_message_handler());
 
   if(fail!=0)
-    error() << "Could not write linkerscript-augmented binary" << eom;
+  {
+    log.error() << "Could not write linkerscript-augmented binary"
+                << messaget::eom;
+  }
 
   return fail;
 }
 
 linker_script_merget::linker_script_merget(
-  compilet &compiler,
   const std::string &elf_binary,
   const std::string &goto_binary,
   const cmdlinet &cmdline,
   message_handlert &message_handler)
-  : messaget(message_handler),
-    compiler(compiler),
-    elf_binary(elf_binary),
+  : elf_binary(elf_binary),
     goto_binary(goto_binary),
     cmdline(cmdline),
+    log(message_handler),
     replacement_predicates(
       {replacement_predicatet(
          "address of array's first member",
@@ -225,8 +236,8 @@ int linker_script_merget::pointerize_linker_defined_symbols(
 
     if(to_pointerize.empty())
       continue;
-    debug() << "Pointerizing the symbol-table value of symbol " << pair.first
-            << eom;
+    log.debug() << "Pointerizing the symbol-table value of symbol "
+                << pair.first << messaget::eom;
     int fail = pointerize_subexprs_of(
       goto_model.symbol_table.get_writeable_ref(pair.first).value,
       to_pointerize,
@@ -235,10 +246,12 @@ int linker_script_merget::pointerize_linker_defined_symbols(
       continue;
     ret=1;
     for(const auto &sym : to_pointerize)
-      error() << " Could not pointerize '" << sym.get_identifier()
-              << "' in symbol table entry " << pair.first << ". Pretty:\n"
-              << sym.pretty() << "\n";
-    error() << eom;
+    {
+      log.error() << " Could not pointerize '" << sym.get_identifier()
+                  << "' in symbol table entry " << pair.first << ". Pretty:\n"
+                  << sym.pretty() << "\n";
+    }
+    log.error() << messaget::eom;
   }
 
   // Finally, pointerize all occurrences of linker-defined symbols in the
@@ -246,27 +259,28 @@ int linker_script_merget::pointerize_linker_defined_symbols(
   for(auto &gf : goto_model.goto_functions.function_map)
   {
     goto_programt &program=gf.second.body;
-    Forall_goto_program_instructions(iit, program)
+    for(auto &instruction : program.instructions)
     {
-      for(exprt *insts : std::list<exprt *>({&(iit->code), &(iit->guard)}))
+      for(exprt *insts :
+          std::list<exprt *>({&(instruction.code), &(instruction.guard)}))
       {
         std::list<symbol_exprt> to_pointerize;
         symbols_to_pointerize(linker_values, *insts, to_pointerize);
         if(to_pointerize.empty())
           continue;
-        debug() << "Pointerizing a program expression..." << eom;
+        log.debug() << "Pointerizing a program expression..." << messaget::eom;
         int fail = pointerize_subexprs_of(*insts, to_pointerize, linker_values);
         if(to_pointerize.empty() && fail==0)
           continue;
         ret=1;
         for(const auto &sym : to_pointerize)
         {
-          error() << " Could not pointerize '" << sym.get_identifier()
-                  << "' in function " << gf.first << ". Pretty:\n"
-                  << sym.pretty() << "\n";
-          error().source_location=iit->source_location;
+          log.error() << " Could not pointerize '" << sym.get_identifier()
+                      << "' in function " << gf.first << ". Pretty:\n"
+                      << sym.pretty() << "\n";
+          log.error().source_location = instruction.source_location;
         }
-        error() << eom;
+        log.error() << messaget::eom;
       }
     }
   }
@@ -283,14 +297,14 @@ int linker_script_merget::replace_expr(
   auto it=linker_values.find(ident);
   if(it==linker_values.end())
   {
-    error() << "Could not find a new expression for linker script-defined "
-            << "symbol '" << ident << "'" << eom;
+    log.error() << "Could not find a new expression for linker script-defined "
+                << "symbol '" << ident << "'" << messaget::eom;
     return 1;
   }
   symbol_exprt new_expr=it->second.first;
   new_expr.add_source_location()=old_symbol.source_location();
-  debug() << "Pointerizing linker-defined symbol '" << ident << "' of shape <"
-          << shape << ">." << eom;
+  log.debug() << "Pointerizing linker-defined symbol '" << ident
+              << "' of shape <" << shape << ">." << messaget::eom;
   old_expr=new_expr;
   return 0;
 }
@@ -318,8 +332,8 @@ int linker_script_merget::pointerize_subexprs_of(
       if(result==to_pointerize.end())
       {
         fail=1;
-        error() << "Too many removals of '" << inner_symbol.get_identifier()
-                << "'" << eom;
+        log.error() << "Too many removals of '" << inner_symbol.get_identifier()
+                    << "'" << messaget::eom;
       }
       else
         to_pointerize.erase(result);
@@ -427,9 +441,9 @@ int linker_script_merget::ls_data2instructions(
     mp_integer array_size = string2integer(d["size"].value);
     if(array_size > MAX_FLATTENED_ARRAY_SIZE)
     {
-      warning() << "Object section '" << d["section"].value << "' of size "
-                << array_size << " is too large to model. Truncating to "
-                << MAX_FLATTENED_ARRAY_SIZE << " bytes" << eom;
+      log.warning() << "Object section '" << d["section"].value << "' of size "
+                    << array_size << " is too large to model. Truncating to "
+                    << MAX_FLATTENED_ARRAY_SIZE << " bytes" << messaget::eom;
       array_size=MAX_FLATTENED_ARRAY_SIZE;
       if(!has_end)
         truncated_symbols[d["size-symbol"].value]=MAX_FLATTENED_ARRAY_SIZE;
@@ -466,8 +480,9 @@ int linker_script_merget::ls_data2instructions(
       });
     if(it == to_json_array(data["addresses"]).end())
     {
-      error() << "Start: Could not find address corresponding to symbol '"
-              << d["start-symbol"].value << "' (start of section)" << eom;
+      log.error() << "Start: Could not find address corresponding to symbol '"
+                  << d["start-symbol"].value << "' (start of section)"
+                  << messaget::eom;
       return 1;
     }
     source_locationt  start_loc;
@@ -502,8 +517,9 @@ int linker_script_merget::ls_data2instructions(
         });
       if(entry == to_json_array(data["addresses"]).end())
       {
-        error() << "Could not find address corresponding to symbol '"
-                << d["end-symbol"].value << "' (end of section)" << eom;
+        log.debug() << "Could not find address corresponding to symbol '"
+                    << d["end-symbol"].value << "' (end of section)"
+                    << messaget::eom;
         return 1;
       }
       source_locationt  end_loc;
@@ -566,10 +582,11 @@ int linker_script_merget::ls_data2instructions(
       symbol_value=d["val"].value;
     else
     {
-      debug() << "Truncating the value of symbol " << d["sym"].value << " from "
-              << d["val"].value << " to " << MAX_FLATTENED_ARRAY_SIZE
-              << " because it corresponds to the size of a too-large section."
-              << eom;
+      log.debug()
+        << "Truncating the value of symbol " << d["sym"].value << " from "
+        << d["val"].value << " to " << MAX_FLATTENED_ARRAY_SIZE
+        << " because it corresponds to the size of a too-large section."
+        << messaget::eom;
       symbol_value=std::to_string(MAX_FLATTENED_ARRAY_SIZE);
     }
 
@@ -685,8 +702,8 @@ int linker_script_merget::get_linker_script_data(
     linker_defined_symbols.begin(),
     linker_defined_symbols.end(),
     std::ostream_iterator<irep_idt>(linker_def_str, "\n"));
-  debug() << "Linker-defined symbols: [" << linker_def_str.str() << "]\n"
-          << eom;
+  log.debug() << "Linker-defined symbols: [" << linker_def_str.str() << "]\n"
+              << messaget::eom;
 
   temporary_filet linker_def_infile("goto-cc-linker-defs", "");
   std::ofstream linker_def_file(linker_def_infile());
@@ -702,19 +719,19 @@ int linker_script_merget::get_linker_script_data(
     "--out-file", def_out_file
   };
 
-  if(get_message_handler().get_verbosity() >= messaget::M_DEBUG)
+  if(log.get_message_handler().get_verbosity() >= messaget::M_DEBUG)
     argv.push_back("--very-verbose");
-  else if(get_message_handler().get_verbosity() > messaget::M_RESULT)
+  else if(log.get_message_handler().get_verbosity() > messaget::M_RESULT)
     argv.push_back("--verbose");
 
-  debug() << "RUN:";
+  log.debug() << "RUN:";
   for(std::size_t i=0; i<argv.size(); i++)
-    debug() << " " << argv[i];
-  debug() << eom;
+    log.debug() << " " << argv[i];
+  log.debug() << messaget::eom;
 
   int rc = run(argv[0], argv, linker_def_infile(), def_out_file, "");
   if(rc!=0)
-    warning() << "Problem parsing linker script" << eom;
+    log.warning() << "Problem parsing linker script" << messaget::eom;
 
   return rc;
 }
@@ -728,8 +745,9 @@ int linker_script_merget::goto_and_object_mismatch(
     if(linker_values.find(sym)==linker_values.end())
     {
       fail=1;
-      error() << "Variable '" << sym << "' was declared extern but never given "
-              << "a value, even in a linker script" << eom;
+      log.error() << "Variable '" << sym
+                  << "' was declared extern but never given "
+                  << "a value, even in a linker script" << messaget::eom;
     }
 
   for(const auto &pair : linker_values)
@@ -739,10 +757,11 @@ int linker_script_merget::goto_and_object_mismatch(
     if(it==linker_defined_symbols.end())
     {
       fail=1;
-      error() << "Linker script-defined symbol '" << pair.first << "' was "
-              << "either defined in the C source code, not declared extern in "
-              << "the C source code, or does not appear in the C source code"
-              << eom;
+      log.error()
+        << "Linker script-defined symbol '" << pair.first << "' was "
+        << "either defined in the C source code, not declared extern in "
+        << "the C source code, or does not appear in the C source code"
+        << messaget::eom;
     }
   }
   return fail;

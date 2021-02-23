@@ -88,7 +88,7 @@ int ld_modet::doit()
   if(cmdline.isset("version") || cmdline.isset("print-sysroot"))
     return run_ld();
 
-  eval_verbosity(
+  messaget::eval_verbosity(
     cmdline.get_value("verbosity"), messaget::M_ERROR, gcc_message_handler);
 
   compilet compiler(cmdline, gcc_message_handler, false);
@@ -145,7 +145,7 @@ int ld_modet::doit()
 
   // We can generate hybrid ELF and Mach-O binaries
   // containing both executable machine code and the goto-binary.
-  return ld_hybrid_binary(compiler);
+  return ld_hybrid_binary(compiler.mode == compilet::COMPILE_LINK_EXECUTABLE);
 }
 
 int ld_modet::run_ld()
@@ -161,15 +161,16 @@ int ld_modet::run_ld()
   // overwrite argv[0]
   new_argv[0] = native_tool_name;
 
-  debug() << "RUN:";
+  messaget log{gcc_message_handler};
+  log.debug() << "RUN:";
   for(std::size_t i = 0; i < new_argv.size(); i++)
-    debug() << " " << new_argv[i];
-  debug() << eom;
+    log.debug() << " " << new_argv[i];
+  log.debug() << messaget::eom;
 
   return run(new_argv[0], new_argv, cmdline.stdin_file, "", "");
 }
 
-int ld_modet::ld_hybrid_binary(compilet &compiler)
+int ld_modet::ld_hybrid_binary(bool building_executable)
 {
   std::string output_file;
 
@@ -183,8 +184,9 @@ int ld_modet::ld_hybrid_binary(compilet &compiler)
   else
     output_file = "a.out";
 
-  debug() << "Running " << native_tool_name << " to generate hybrid binary"
-          << eom;
+  messaget log{gcc_message_handler};
+  log.debug() << "Running " << native_tool_name << " to generate hybrid binary"
+              << messaget::eom;
 
   // save the goto-cc output file
   std::string goto_binary = output_file + goto_binary_tmp_suffix;
@@ -195,7 +197,7 @@ int ld_modet::ld_hybrid_binary(compilet &compiler)
   }
   catch(const cprover_exception_baset &e)
   {
-    error() << "Rename failed: " << e.what() << eom;
+    log.error() << "Rename failed: " << e.what() << messaget::eom;
     return 1;
   }
 
@@ -204,7 +206,7 @@ int ld_modet::ld_hybrid_binary(compilet &compiler)
   if(result == 0 && cmdline.isset('T'))
   {
     linker_script_merget ls_merge(
-      compiler, output_file, goto_binary, cmdline, get_message_handler());
+      output_file, goto_binary, cmdline, message_handler);
     result = ls_merge.add_linker_script_definitions();
   }
 
@@ -216,8 +218,8 @@ int ld_modet::ld_hybrid_binary(compilet &compiler)
       native_linker,
       goto_binary,
       output_file,
-      compiler.mode == compilet::COMPILE_LINK_EXECUTABLE,
-      get_message_handler());
+      building_executable,
+      message_handler);
   }
 
   return result;

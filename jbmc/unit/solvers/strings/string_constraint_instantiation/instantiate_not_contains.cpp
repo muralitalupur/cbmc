@@ -11,7 +11,6 @@ Author: Jesse Sigal, jesse.sigal@diffblue.com
 
 #include <java_bytecode/java_bytecode_language.h>
 #include <java_bytecode/java_types.h>
-#include <numeric>
 
 #include <langapi/language_util.h>
 #include <langapi/mode.h>
@@ -20,7 +19,12 @@ Author: Jesse Sigal, jesse.sigal@diffblue.com
 #include <solvers/strings/string_constraint_instantiation.h>
 
 #include <util/config.h>
+#include <util/mathematical_expr.h>
+#include <util/mathematical_types.h>
+#include <util/pointer_expr.h>
 #include <util/simplify_expr.h>
+
+#include <numeric>
 
 /// \class Types used throughout the test. Currently it is impossible to
 /// statically initialize this value, there is a PR to allow this
@@ -203,10 +207,12 @@ SCENARIO(
   GIVEN("The not_contains axioms of String.lastIndexOf(String, Int)")
   {
     // Creating "ab".lastIndexOf("b", 0)
-    const function_application_exprt func(
-      symbol_exprt(ID_cprover_string_last_index_of_func, t.length_type()),
-      {ab, b, from_integer(2)},
-      t.length_type());
+    mathematical_function_typet::domaint domain{
+      {ab.type(), b.type(), t.length_type()}};
+    const function_application_exprt func{
+      symbol_exprt{ID_cprover_string_last_index_of_func,
+                   mathematical_function_typet{domain, t.length_type()}},
+      {ab, b, from_integer(2)}};
 
     // Generating the corresponding axioms and simplifying, recording info
     string_constraint_generatort generator(empty_ns);

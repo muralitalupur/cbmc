@@ -69,8 +69,8 @@ void show_call_sequences(const goto_modelt &goto_model)
   // do per function
   // show the calls in the body of the specific function
 
-  forall_goto_functions(f_it, goto_model.goto_functions)
-    show_call_sequences(f_it->first, f_it->second.body);
+  for(const auto &gf_entry : goto_model.goto_functions.function_map)
+    show_call_sequences(gf_entry.first, gf_entry.second.body);
 }
 
 class check_call_sequencet
@@ -272,12 +272,12 @@ static void list_calls_and_arguments(
   const namespacet &ns,
   const goto_programt &goto_program)
 {
-  forall_goto_program_instructions(i_it, goto_program)
+  for(const auto &instruction : goto_program.instructions)
   {
-    if(!i_it->is_function_call())
+    if(!instruction.is_function_call())
       continue;
 
-    const code_function_callt &call = to_code_function_call(i_it->code);
+    const code_function_callt &call = to_code_function_call(instruction.code);
 
     const exprt &f=call.function();
 
@@ -319,6 +319,6 @@ void list_calls_and_arguments(const goto_modelt &goto_model)
 
   const namespacet ns(goto_model.symbol_table);
 
-  forall_goto_functions(f_it, goto_model.goto_functions)
-    list_calls_and_arguments(ns, f_it->second.body);
+  for(const auto &gf_entry : goto_model.goto_functions.function_map)
+    list_calls_and_arguments(ns, gf_entry.second.body);
 }

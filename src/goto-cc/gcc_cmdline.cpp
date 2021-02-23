@@ -11,7 +11,6 @@ Author: CM Wintersteiger, 2006
 
 #include "gcc_cmdline.h"
 
-#include <cassert>
 #include <cstring>
 #include <iostream>
 #include <fstream>
@@ -181,6 +180,7 @@ const char *gcc_options_without_argument[]=
   "-O1",
   "-O2",
   "-O3",
+  "-O6",
   "-Os",
   "-Oz", // Apple only
   "-C",

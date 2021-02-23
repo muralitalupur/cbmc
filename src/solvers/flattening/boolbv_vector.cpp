@@ -25,12 +25,11 @@ bvt boolbvt::convert_vector(const vector_exprt &expr)
   {
     std::size_t op_width = width / operands.size();
 
-    forall_expr(it, operands)
+    for(const auto &op : operands)
     {
-      const bvt &tmp = convert_bv(*it, op_width);
+      const bvt &tmp = convert_bv(op, op_width);
 
-      forall_literals(it2, tmp)
-        bv.push_back(*it2);
+      bv.insert(bv.end(), tmp.begin(), tmp.end());
     }
   }
 

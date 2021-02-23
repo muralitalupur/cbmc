@@ -13,10 +13,6 @@ Author: Daniel Kroening, kroening@kroening.com
 
 #include <util/symbol_table.h>
 
-#ifdef DEBUG
-#  include <iostream>
-#endif
-
 /// Get or create a failed symbol for the given pointer-typed expression. These
 /// are used as placeholders when dereferencing expressions that are illegal to
 /// dereference, such as null pointers. The \ref add_failed_symbols pass must
@@ -34,8 +30,7 @@ Author: Daniel Kroening, kroening@kroening.com
 const symbolt *
 symex_dereference_statet::get_or_create_failed_symbol(const exprt &expr)
 {
-  if(expr.id()==ID_symbol &&
-     expr.get_bool(ID_C_SSA_symbol))
+  if(is_ssa_expr(expr))
   {
     const ssa_exprt &ssa_expr=to_ssa_expr(expr);
     if(ssa_expr.get_original_expr().id()!=ID_symbol)
@@ -79,33 +74,6 @@ symex_dereference_statet::get_or_create_failed_symbol(const exprt &expr)
   }
 
   return nullptr;
-}
-
-/// Just forwards a value-set query to `state.value_set`
-void symex_dereference_statet::get_value_set(
-  const exprt &expr,
-  value_setst::valuest &value_set) const
-{
-  state.value_set.get_value_set(expr, value_set, ns);
-
-#ifdef DEBUG
-  std::cout << "symex_dereference_statet state.value_set={\n";
-  state.value_set.output(ns, std::cout, "  - ");
-  std::cout << "}" << std::endl;
-#endif
-
-#if 0
-  std::cout << "E: " << from_expr(goto_symex.ns, irep_idt(), expr) << '\n';
-#endif
-
-#if 0
-  std::cout << "**************************\n";
-  for(value_setst::valuest::const_iterator it=value_set.begin();
-      it!=value_set.end();
-      it++)
-    std::cout << from_expr(goto_symex.ns, irep_idt(), *it) << '\n';
-  std::cout << "**************************\n";
-#endif
 }
 
 /// Just forwards a value-set query to `state.value_set`

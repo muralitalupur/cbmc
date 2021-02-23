@@ -16,6 +16,7 @@ Author: Daniel Kroening, kroening@kroening.com
 
 #include <util/invariant.h>
 #include <util/json.h>
+#include <util/pointer_expr.h>
 #include <util/prefix.h>
 #include <util/simplify_expr.h>
 #include <util/string_constant.h>
@@ -275,11 +276,13 @@ bool taint_analysist::operator()(
 
       end.add(goto_programt::make_end_function());
 
-      forall_goto_functions(f_it, goto_functions)
-        if(f_it->second.body_available() &&
-           f_it->first!=goto_functionst::entry_point())
+      for(const auto &gf_entry : goto_functions.function_map)
+      {
+        if(
+          gf_entry.second.body_available() &&
+          gf_entry.first != goto_functionst::entry_point())
         {
-          const symbolt &symbol = ns.lookup(f_it->first);
+          const symbolt &symbol = ns.lookup(gf_entry.first);
           const code_function_callt call(symbol.symbol_expr());
           goto_programt::targett t =
             calls.add(goto_programt::make_function_call(call));
@@ -288,6 +291,7 @@ bool taint_analysist::operator()(
           gotos.add(goto_programt::make_goto(
             t, side_effect_expr_nondett(bool_typet(), symbol.location)));
         }
+      }
 
       goto_functionst::goto_functiont &entry=
         goto_functions.function_map[goto_functionst::entry_point()];
@@ -312,19 +316,19 @@ bool taint_analysist::operator()(
       return false;
     }
 
-    forall_goto_functions(f_it, goto_functions)
+    for(const auto &gf_entry : goto_functions.function_map)
     {
-      if(!f_it->second.body.has_assertion())
+      if(!gf_entry.second.body.has_assertion())
         continue;
 
-      const symbolt &symbol=ns.lookup(f_it->first);
+      const symbolt &symbol = ns.lookup(gf_entry.first);
 
-      if(f_it->first=="__actual_thread_spawn")
+      if(gf_entry.first == "__actual_thread_spawn")
         continue;
 
       bool first=true;
 
-      forall_goto_program_instructions(i_it, f_it->second.body)
+      forall_goto_program_instructions(i_it, gf_entry.second.body)
       {
         if(!i_it->is_assert())
           continue;

@@ -34,6 +34,8 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <json/json_interface.h>
 #include <xmllang/xml_interface.h>
 
+#include <goto-instrument/cover.h>
+
 class goto_functionst;
 class optionst;
 
@@ -47,10 +49,10 @@ class optionst;
   "(debug-level):(no-propagation)(no-simplify-if)" \
   "(document-subgoals)(outfile):(test-preprocessor)" \
   "(write-solver-stats-to):"  \
+  "(show-array-constraints)"  \
   "D:I:(c89)(c99)(c11)(cpp98)(cpp03)(cpp11)" \
   "(object-bits):" \
   OPT_GOTO_CHECK \
-  "(no-assertions)(no-assumptions)" \
   "(malloc-fail-assert)(malloc-fail-null)" \
   "(malloc-may-fail)" \
   OPT_XML_INTERFACE \
@@ -70,10 +72,11 @@ class optionst;
   "(drop-unused-functions)" \
   "(havoc-undefined-functions)" \
   "(property):(stop-on-fail)(trace)" \
-  "(error-label):(verbosity):(no-library)" \
+  "(verbosity):(no-library)" \
   "(nondet-static)" \
   "(version)" \
-  "(cover):(symex-coverage-report):" \
+  OPT_COVER \
+  "(symex-coverage-report):" \
   "(mm):" \
   OPT_TIMESTAMP \
   "(i386-linux)(i386-macos)(i386-win32)(win32)(winx64)(gcc)" \

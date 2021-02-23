@@ -115,6 +115,7 @@ class optionst;
 
 #define GOTO_ANALYSER_OPTIONS_AI \
   "(recursive-interprocedural)" \
+  "(three-way-merge)" \
   "(legacy-ait)" \
   "(legacy-concurrent)"
 
@@ -129,7 +130,18 @@ class optionst;
   "(intervals)" \
   "(non-null)" \
   "(constants)" \
-  "(dependence-graph)"
+  "(dependence-graph)" \
+  "(vsd)(variable-sensitivity)" \
+  "(dependence-graph-vs)" \
+
+#define GOTO_ANALYSER_OPTIONS_VSD \
+  "(vsd-values):" \
+  "(vsd-structs):" \
+  "(vsd-arrays):" \
+  "(vsd-pointers):" \
+  "(vsd-unions):" \
+  "(vsd-flow-insensitive)" \
+  "(vsd-data-dependencies)"
 
 #define GOTO_ANALYSER_OPTIONS_STORAGE \
   "(one-domain-per-history)" \
@@ -167,7 +179,8 @@ class optionst;
   "(location-sensitive)(concurrent)" \
   GOTO_ANALYSER_OPTIONS_HISTORY \
   GOTO_ANALYSER_OPTIONS_DOMAIN \
-  GOTO_ANALYSER_OPTIONS_STORAGE \
+  GOTO_ANALYSER_OPTIONS_VSD \
+  GOTO_ANALYSER_OPTIONS_STORAGE  \
   GOTO_ANALYSER_OPTIONS_OUTPUT \
   GOTO_ANALYSER_OPTIONS_SPECIFIC_ANALYSES \
 // clang-format on

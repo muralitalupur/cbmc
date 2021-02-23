@@ -14,10 +14,11 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <sstream>
 
 #include <util/arith_tools.h>
-#include <util/config.h>
 #include <util/c_types.h>
+#include <util/config.h>
 #include <util/expr_util.h>
 #include <util/find_symbols.h>
+#include <util/pointer_expr.h>
 #include <util/prefix.h>
 #include <util/simplify_expr.h>
 
@@ -89,20 +90,26 @@ void goto_program2codet::build_dead_map()
   dead_map.clear();
 
   // record last dead X
-  forall_goto_program_instructions(target, goto_program)
-    if(target->is_dead())
-      dead_map[target->get_dead().get_identifier()] = target->location_number;
+  for(const auto &instruction : goto_program.instructions)
+  {
+    if(instruction.is_dead())
+    {
+      dead_map[instruction.get_dead().get_identifier()] =
+        instruction.location_number;
+    }
+  }
 }
 
 void goto_program2codet::scan_for_varargs()
 {
   va_list_expr.clear();
 
-  forall_goto_program_instructions(target, goto_program)
-    if(target->is_assign())
+  for(const auto &instruction : goto_program.instructions)
+  {
+    if(instruction.is_assign())
     {
-      const exprt &l = target->get_assign().lhs();
-      const exprt &r = target->get_assign().rhs();
+      const exprt &l = instruction.get_assign().lhs();
+      const exprt &r = instruction.get_assign().rhs();
 
       // find va_start
       if(
@@ -119,6 +126,7 @@ void goto_program2codet::scan_for_varargs()
               to_typecast_expr(r).op().id()==ID_address_of)
         va_list_expr.insert(l);
     }
+  }
 
   if(!va_list_expr.empty())
     system_headers.insert("stdarg.h");
@@ -469,7 +477,7 @@ goto_programt::const_targett goto_program2codet::convert_decl(
     {
       if(next->is_assign())
       {
-        d.copy_to_operands(next->get_assign().rhs());
+        d.set_initial_value({next->get_assign().rhs()});
       }
       else
       {
@@ -1434,13 +1442,12 @@ void goto_program2codet::cleanup_code(
 
   if(code.has_operands())
   {
-    exprt::operandst &operands=code.operands();
-    Forall_expr(it, operands)
+    for(auto &op : code.operands())
     {
-      if(it->id()==ID_code)
-        cleanup_code(to_code(*it), code.get_statement());
+      if(op.id() == ID_code)
+        cleanup_code(to_code(op), code.get_statement());
       else
-        cleanup_expr(*it, false);
+        cleanup_expr(op, false);
     }
   }
 
@@ -1497,10 +1504,14 @@ void goto_program2codet::cleanup_function_call(
     if(parameters.size()==arguments.size())
     {
       code_typet::parameterst::const_iterator it=parameters.begin();
-      Forall_expr(it2, arguments)
+      for(auto &argument : arguments)
       {
-        if(it2->type().id() == ID_union || it2->type().id() == ID_union_tag)
-          it2->type()=it->type();
+        if(
+          argument.type().id() == ID_union ||
+          argument.type().id() == ID_union_tag)
+        {
+          argument.type() = it->type();
+        }
         ++it;
       }
     }
@@ -1591,6 +1602,8 @@ void goto_program2codet::remove_const(typet &type)
         ++it)
       remove_const(it->type());
   }
+  else if(type.id() == ID_c_bit_field)
+    to_c_bit_field_type(type).subtype().remove(ID_C_constant);
 }
 
 static bool has_labels(const codet &code)

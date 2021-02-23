@@ -22,6 +22,7 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <util/mathematical_types.h>
 #include <util/pointer_offset_size.h>
 #include <util/simplify_expr.h>
+#include <util/simplify_utils.h>
 #include <util/string_expr.h>
 #include <util/string_utils.h>
 
@@ -382,7 +383,7 @@ void goto_symext::constant_propagate_empty_string(
   symex_assignt &symex_assign,
   const function_application_exprt &f_l1)
 {
-  const auto &f_type = to_mathematical_function_type(f_l1.function().type());
+  const auto &f_type = f_l1.function_type();
   const auto &length_type = f_type.domain().at(0);
   const auto &char_type = to_pointer_type(f_type.domain().at(1)).subtype();
 
@@ -410,7 +411,7 @@ bool goto_symext::constant_propagate_string_concat(
   symex_assignt &symex_assign,
   const function_application_exprt &f_l1)
 {
-  const auto &f_type = to_mathematical_function_type(f_l1.function().type());
+  const auto &f_type = f_l1.function_type();
   const auto &length_type = f_type.domain().at(0);
   const auto &char_type = to_pointer_type(f_type.domain().at(1)).subtype();
 
@@ -465,7 +466,7 @@ bool goto_symext::constant_propagate_string_substring(
   PRECONDITION(num_operands >= 4);
   PRECONDITION(num_operands <= 5);
 
-  const auto &f_type = to_mathematical_function_type(f_l1.function().type());
+  const auto &f_type = f_l1.function_type();
   const auto &length_type = f_type.domain().at(0);
   const auto &char_type = to_pointer_type(f_type.domain().at(1)).subtype();
 
@@ -557,7 +558,7 @@ bool goto_symext::constant_propagate_integer_to_string(
   PRECONDITION(num_operands >= 3);
   PRECONDITION(num_operands <= 4);
 
-  const auto &f_type = to_mathematical_function_type(f_l1.function().type());
+  const auto &f_type = f_l1.function_type();
   const auto &length_type = f_type.domain().at(0);
   const auto &char_type = to_pointer_type(f_type.domain().at(1)).subtype();
 
@@ -633,7 +634,7 @@ bool goto_symext::constant_propagate_delete_char_at(
   // - index of char to delete
   PRECONDITION(f_l1.arguments().size() == 4);
 
-  const auto &f_type = to_mathematical_function_type(f_l1.function().type());
+  const auto &f_type = f_l1.function_type();
   const auto &length_type = f_type.domain().at(0);
   const auto &char_type = to_pointer_type(f_type.domain().at(1)).subtype();
 
@@ -707,7 +708,7 @@ bool goto_symext::constant_propagate_delete(
   // - index of end of substring to delete (exclusive)
   PRECONDITION(f_l1.arguments().size() == 5);
 
-  const auto &f_type = to_mathematical_function_type(f_l1.function().type());
+  const auto &f_type = f_l1.function_type();
   const auto &length_type = f_type.domain().at(0);
   const auto &char_type = to_pointer_type(f_type.domain().at(1)).subtype();
 
@@ -800,7 +801,7 @@ bool goto_symext::constant_propagate_set_length(
   // - new length of the string
   PRECONDITION(f_l1.arguments().size() == 4);
 
-  const auto &f_type = to_mathematical_function_type(f_l1.function().type());
+  const auto &f_type = f_l1.function_type();
   const auto &length_type = f_type.domain().at(0);
   const auto &char_type = to_pointer_type(f_type.domain().at(1)).subtype();
 
@@ -882,7 +883,7 @@ bool goto_symext::constant_propagate_set_char_at(
   // - new char
   PRECONDITION(f_l1.arguments().size() == 5);
 
-  const auto &f_type = to_mathematical_function_type(f_l1.function().type());
+  const auto &f_type = f_l1.function_type();
   const auto &length_type = f_type.domain().at(0);
   const auto &char_type = to_pointer_type(f_type.domain().at(1)).subtype();
 
@@ -945,7 +946,7 @@ bool goto_symext::constant_propagate_case_change(
   const function_application_exprt &f_l1,
   bool to_upper)
 {
-  const auto &f_type = to_mathematical_function_type(f_l1.function().type());
+  const auto &f_type = f_l1.function_type();
   const auto &length_type = f_type.domain().at(0);
   const auto &char_type = to_pointer_type(f_type.domain().at(1)).subtype();
 
@@ -1006,7 +1007,7 @@ bool goto_symext::constant_propagate_replace(
   symex_assignt &symex_assign,
   const function_application_exprt &f_l1)
 {
-  const auto &f_type = to_mathematical_function_type(f_l1.function().type());
+  const auto &f_type = f_l1.function_type();
   const auto &length_type = f_type.domain().at(0);
   const auto &char_type = to_pointer_type(f_type.domain().at(1)).subtype();
 
@@ -1114,7 +1115,7 @@ bool goto_symext::constant_propagate_trim(
   symex_assignt &symex_assign,
   const function_application_exprt &f_l1)
 {
-  const auto &f_type = to_mathematical_function_type(f_l1.function().type());
+  const auto &f_type = f_l1.function_type();
   const auto &length_type = f_type.domain().at(0);
   const auto &char_type = to_pointer_type(f_type.domain().at(1)).subtype();
 

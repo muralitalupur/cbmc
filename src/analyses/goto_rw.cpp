@@ -14,15 +14,17 @@ Date: April 2010
 #include <limits>
 #include <memory>
 
-#include <util/expr_util.h>
-#include <util/std_code.h>
-#include <util/std_expr.h>
-#include <util/pointer_offset_size.h>
+#include <util/arith_tools.h>
+#include <util/bitvector_expr.h>
 #include <util/byte_operators.h>
 #include <util/endianness_map.h>
-#include <util/arith_tools.h>
-#include <util/simplify_expr.h>
+#include <util/expr_util.h>
 #include <util/make_unique.h>
+#include <util/pointer_expr.h>
+#include <util/pointer_offset_size.h>
+#include <util/simplify_expr.h>
+#include <util/std_code.h>
+#include <util/std_expr.h>
 
 #include <langapi/language_util.h>
 
@@ -64,20 +66,20 @@ rw_range_sett::~rw_range_sett()
 void rw_range_sett::output(std::ostream &out) const
 {
   out << "READ:\n";
-  forall_rw_range_set_r_objects(it, *this)
+  for(const auto &read_object_entry : get_r_set())
   {
-    out << "  " << it->first;
-    it->second->output(ns, out);
+    out << "  " << read_object_entry.first;
+    read_object_entry.second->output(ns, out);
     out << '\n';
   }
 
   out << '\n';
 
   out << "WRITE:\n";
-  forall_rw_range_set_w_objects(it, *this)
+  for(const auto &written_object_entry : get_w_set())
   {
-    out << "  " << it->first;
-    it->second->output(ns, out);
+    out << "  " << written_object_entry.first;
+    written_object_entry.second->output(ns, out);
     out << '\n';
   }
 }
@@ -427,17 +429,13 @@ void rw_range_sett::get_objects_typecast(
 
 void rw_range_sett::get_objects_address_of(const exprt &object)
 {
-  if(object.id() == ID_string_constant ||
-     object.id() == ID_label ||
-     object.id() == ID_array ||
-     object.id() == ID_null_object)
+  if(
+    object.id() == ID_string_constant || object.id() == ID_label ||
+    object.id() == ID_array || object.id() == ID_null_object ||
+    object.id() == ID_symbol)
   {
     // constant, nothing to do
     return;
-  }
-  else if(object.id()==ID_symbol)
-  {
-    get_objects_rec(get_modet::READ, object);
   }
   else if(object.id()==ID_dereference)
   {
@@ -747,9 +745,11 @@ static void goto_rw(
   rw_set.get_objects_rec(
     function, target, rw_range_sett::get_modet::READ, function_call.function());
 
-  forall_expr(it, function_call.arguments())
+  for(const auto &argument : function_call.arguments())
+  {
     rw_set.get_objects_rec(
-      function, target, rw_range_sett::get_modet::READ, *it);
+      function, target, rw_range_sett::get_modet::READ, argument);
+  }
 }
 
 void goto_rw(

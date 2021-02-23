@@ -25,17 +25,17 @@ void irep_serializationt::write_irep(
 {
   write_string_ref(out, irep.id());
 
-  forall_irep(it, irep.get_sub())
+  for(const auto &sub_irep : irep.get_sub())
   {
     out.put('S');
-    reference_convert(*it, out);
+    reference_convert(sub_irep, out);
   }
 
-  forall_named_irep(it, irep.get_named_sub())
+  for(const auto &sub_irep_entry : irep.get_named_sub())
   {
     out.put('N');
-    write_string_ref(out, it->first);
-    reference_convert(it->second, out);
+    write_string_ref(out, sub_irep_entry.first);
+    reference_convert(sub_irep_entry.second, out);
   }
 
   out.put(0); // terminator
@@ -76,14 +76,14 @@ irept irep_serializationt::read_irep(std::istream &in)
     sub.push_back(reference_convert(in));
   }
 
-#ifdef NAMED_SUB_IS_FORWARD_LIST
+#if NAMED_SUB_IS_FORWARD_LIST
   irept::named_subt::iterator before = named_sub.before_begin();
 #endif
   while(in.peek()=='N')
   {
     in.get();
     irep_idt id = read_string_ref(in);
-#ifdef NAMED_SUB_IS_FORWARD_LIST
+#if NAMED_SUB_IS_FORWARD_LIST
     named_sub.emplace_after(before, id, reference_convert(in));
     ++before;
 #else
@@ -95,7 +95,7 @@ irept irep_serializationt::read_irep(std::istream &in)
   {
     in.get();
     irep_idt id = read_string_ref(in);
-#ifdef NAMED_SUB_IS_FORWARD_LIST
+#if NAMED_SUB_IS_FORWARD_LIST
     named_sub.emplace_after(before, id, reference_convert(in));
     ++before;
 #else

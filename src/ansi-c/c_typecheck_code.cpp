@@ -15,6 +15,7 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <util/config.h>
 #include <util/expr_initializer.h>
 #include <util/range.h>
+#include <util/string_constant.h>
 
 #include "ansi_c_declaration.h"
 
@@ -102,9 +103,24 @@ void c_typecheck_baset::typecheck_code(codet &code)
   }
   else if(statement==ID_static_assert)
   {
-    assert(code.operands().size()==2);
+    PRECONDITION(code.operands().size() == 2);
+
     typecheck_expr(code.op0());
     typecheck_expr(code.op1());
+
+    implicit_typecast_bool(code.op0());
+    make_constant(code.op0());
+
+    if(code.op0().is_false())
+    {
+      // failed
+      error().source_location = code.find_source_location();
+      error() << "static assertion failed";
+      if(code.op1().id() == ID_string_constant)
+        error() << ": " << to_string_constant(code.op1()).get_value();
+      error() << eom;
+      throw 0;
+    }
   }
   else if(statement==ID_CPROVER_try_catch ||
           statement==ID_CPROVER_try_finally)
@@ -247,7 +263,6 @@ void c_typecheck_baset::typecheck_decl(codet &code)
 
   if(declaration.get_is_static_assert())
   {
-    assert(declaration.operands().size()==2);
     codet new_code(ID_static_assert);
     new_code.add_source_location()=code.source_location();
     new_code.operands().swap(declaration.operands());
@@ -794,16 +809,75 @@ void c_typecheck_baset::typecheck_dowhile(code_dowhilet &code)
   typecheck_spec_expr(code, ID_C_spec_loop_invariant);
 }
 
-void c_typecheck_baset::typecheck_spec_expr(
+void c_typecheck_baset::typecheck_spec_expr(codet &code, const irep_idt &spec)
+{
+  if(code.find(spec).is_not_nil())
+  {
+    exprt &constraint = static_cast<exprt &>(code.add(spec));
+
+    typecheck_expr(constraint);
+    implicit_typecast_bool(constraint);
+  }
+}
+
+void c_typecheck_baset::typecheck_assigns(
+  const code_typet &function_declarator,
+  const irept &contract)
+{
+  exprt assigns = static_cast<const exprt &>(contract.find(ID_C_spec_assigns));
+
+  // Make sure there is an assigns clause to check
+  if(assigns.is_not_nil())
+  {
+    for(const auto &curr_param : function_declarator.parameters())
+    {
+      if(curr_param.id() == ID_declaration)
+      {
+        const ansi_c_declarationt &param_declaration =
+          to_ansi_c_declaration(curr_param);
+
+        for(const auto &decl : param_declaration.declarators())
+        {
+          typecheck_assigns(decl, assigns);
+        }
+      }
+    }
+  }
+}
+
+void c_typecheck_baset::typecheck_assigns(
+  const ansi_c_declaratort &declarator,
+  const exprt &assigns)
+{
+  for(exprt curr_op : assigns.operands())
+  {
+    if(curr_op.id() != ID_symbol)
+    {
+      continue;
+    }
+    const symbol_exprt &symbol_op = to_symbol_expr(curr_op);
+
+    if(symbol_op.get(ID_C_base_name) == declarator.get_base_name())
+    {
+      error().source_location = declarator.source_location();
+      error() << "Formal parameter " << declarator.get_name() << " without "
+              << "dereference appears in ASSIGNS clause. Assigning this "
+              << "parameter will never affect the state of the calling context."
+              << " Did you mean to write *" << declarator.get_name() << "?"
+              << eom;
+      throw 0;
+    }
+  }
+}
+
+void c_typecheck_baset::typecheck_assigns_exprs(
   codet &code,
   const irep_idt &spec)
 {
   if(code.find(spec).is_not_nil())
   {
-    exprt &constraint=
-      static_cast<exprt&>(code.add(spec));
+    exprt &constraint = static_cast<exprt &>(code.add(spec));
 
     typecheck_expr(constraint);
-    implicit_typecast_bool(constraint);
   }
 }

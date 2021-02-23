@@ -154,23 +154,16 @@ pointer_offset_bits(const typet &type, const namespacet &ns)
   else if(type.id()==ID_union)
   {
     const union_typet &union_type=to_union_type(type);
-    mp_integer result=0;
 
-    // compute max
+    if(union_type.components().empty())
+      return mp_integer{0};
 
-    for(const auto &c : union_type.components())
-    {
-      const typet &subtype = c.type();
-      auto sub_size = pointer_offset_bits(subtype, ns);
+    const auto widest_member = union_type.find_widest_union_component(ns);
 
-      if(!sub_size.has_value())
-        return {};
-
-      if(*sub_size > result)
-        result = *sub_size;
-    }
-
-    return result;
+    if(widest_member.has_value())
+      return widest_member->second;
+    else
+      return {};
   }
   else if(type.id()==ID_signedbv ||
           type.id()==ID_unsignedbv ||
@@ -670,13 +663,8 @@ optionalt<exprt> get_subexpression_at_offset(
 
     // no arrays of non-byte-aligned, zero-, or unknown-sized objects
     if(
-      !elem_size_bits.has_value() || *elem_size_bits == 0 ||
-      *elem_size_bits % 8 != 0)
-    {
-      return {};
-    }
-
-    if(*target_size_bits <= *elem_size_bits)
+      elem_size_bits.has_value() && *elem_size_bits > 0 &&
+      *elem_size_bits % 8 == 0 && *target_size_bits <= *elem_size_bits)
     {
       const mp_integer elem_size_bytes = *elem_size_bits / 8;
       const auto offset_inside_elem = offset_bytes % elem_size_bytes;

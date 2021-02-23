@@ -11,17 +11,18 @@ Author: Daniel Kroening, kroening@kroening.com
 #include "arith_tools.h"
 #include "expr.h"
 #include "expr_util.h"
+#include "floatbv_expr.h"
 #include "ieee_float.h"
 #include "invariant.h"
 #include "namespace.h"
 #include "simplify_expr.h"
+#include "simplify_utils.h"
 #include "std_expr.h"
 
 simplify_exprt::resultt<>
 simplify_exprt::simplify_isinf(const unary_exprt &expr)
 {
-  if(expr.op().type().id() != ID_floatbv)
-    return unchanged(expr);
+  PRECONDITION(expr.op().type().id() == ID_floatbv);
 
   if(expr.op().is_constant())
   {
@@ -35,6 +36,8 @@ simplify_exprt::simplify_isinf(const unary_exprt &expr)
 simplify_exprt::resultt<>
 simplify_exprt::simplify_isnan(const unary_exprt &expr)
 {
+  PRECONDITION(expr.op().type().id() == ID_floatbv);
+
   if(expr.op().is_constant())
   {
     ieee_floatt value(to_constant_expr(expr.op()));
@@ -47,6 +50,8 @@ simplify_exprt::simplify_isnan(const unary_exprt &expr)
 simplify_exprt::resultt<>
 simplify_exprt::simplify_isnormal(const unary_exprt &expr)
 {
+  PRECONDITION(expr.op().type().id() == ID_floatbv);
+
   if(expr.op().is_constant())
   {
     ieee_floatt value(to_constant_expr(expr.op()));
@@ -357,7 +362,15 @@ simplify_exprt::simplify_ieee_float_relation(const binary_relation_exprt &expr)
       UNREACHABLE;
   }
 
-  if(expr.lhs() == expr.rhs())
+  // addition and multiplication are commutative, but not associative
+  exprt lhs_sorted = expr.lhs();
+  if(lhs_sorted.id() == ID_floatbv_plus || lhs_sorted.id() == ID_floatbv_mult)
+    sort_operands(lhs_sorted.operands());
+  exprt rhs_sorted = expr.rhs();
+  if(rhs_sorted.id() == ID_floatbv_plus || rhs_sorted.id() == ID_floatbv_mult)
+    sort_operands(rhs_sorted.operands());
+
+  if(lhs_sorted == rhs_sorted)
   {
     // x!=x is the same as saying isnan(op)
     exprt isnan = isnan_exprt(expr.lhs());

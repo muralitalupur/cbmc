@@ -64,10 +64,10 @@ void goto_inlinet::parameter_assignments(
     // if you run out of actual arguments there was a mismatch
     if(it1==arguments.end())
     {
-      warning().source_location=source_location;
-      warning() << "call to '" << function_name << "': "
-                << "not enough arguments, "
-                << "inserting non-deterministic value" << eom;
+      log.warning().source_location = source_location;
+      log.warning() << "call to '" << function_name << "': "
+                    << "not enough arguments, "
+                    << "inserting non-deterministic value" << messaget::eom;
 
       actual = side_effect_expr_nondett(parameter_type, source_location);
     }
@@ -171,9 +171,9 @@ void goto_inlinet::replace_return(
       {
         if(!code_return.has_return_value())
         {
-          warning().source_location=it->code.find_source_location();
-          warning() << "return expects one operand!\n"
-                    << it->code.pretty() << eom;
+          log.warning().source_location = it->code.find_source_location();
+          log.warning() << "return expects one operand!\n"
+                        << it->code.pretty() << messaget::eom;
           continue;
         }
 
@@ -256,7 +256,7 @@ void goto_inlinet::insert_function_body(
   end.type=LOCATION;
 
   // make sure the inlined function does not introduce hiding
-  if(ns.lookup(identifier).is_hidden())
+  if(goto_function.is_hidden())
   {
     for(auto &instruction : body.instructions)
       instruction.labels.remove(CPROVER_PREFIX "HIDE");
@@ -296,16 +296,16 @@ void goto_inlinet::insert_function_body(
 
   if(adjust_function)
   {
-    Forall_goto_program_instructions(it, tmp)
+    for(auto &instruction : tmp.instructions)
     {
-      replace_location(it->source_location, target->source_location);
-      replace_location(it->code, target->source_location);
+      replace_location(instruction.source_location, target->source_location);
+      replace_location(instruction.code, target->source_location);
 
-      if(it->has_condition())
+      if(instruction.has_condition())
       {
-        exprt c = it->get_condition();
+        exprt c = instruction.get_condition();
         replace_location(c, target->source_location);
-        it->set_condition(c);
+        instruction.set_condition(c);
       }
     }
   }
@@ -355,9 +355,9 @@ void goto_inlinet::expand_function_call(
   {
     // it's recursive.
     // Uh. Buh. Give up.
-    warning().source_location=function.find_source_location();
-    warning() << "recursion is ignored on call to '" << identifier << "'"
-              << eom;
+    log.warning().source_location = function.find_source_location();
+    log.warning() << "recursion is ignored on call to '" << identifier << "'"
+                  << messaget::eom;
 
     if(force_full)
       target->turn_into_skip();
@@ -370,8 +370,9 @@ void goto_inlinet::expand_function_call(
 
   if(f_it==goto_functions.function_map.end())
   {
-    warning().source_location=function.find_source_location();
-    warning() << "missing function '" << identifier << "' is ignored" << eom;
+    log.warning().source_location = function.find_source_location();
+    log.warning() << "missing function '" << identifier << "' is ignored"
+                  << messaget::eom;
 
     if(force_full)
       target->turn_into_skip();
@@ -401,15 +402,17 @@ void goto_inlinet::expand_function_call(
         function,
         arguments);
 
-      progress() << "Inserting " << identifier << " into caller" << eom;
-      progress() << "Number of instructions: "
-                 << cached.body.instructions.size() << eom;
+      log.progress() << "Inserting " << identifier << " into caller"
+                     << messaget::eom;
+      log.progress() << "Number of instructions: "
+                     << cached.body.instructions.size() << messaget::eom;
 
       if(!caching)
       {
-        progress() << "Removing " << identifier << " from cache" << eom;
-        progress() << "Number of instructions: "
-                   << cached.body.instructions.size() << eom;
+        log.progress() << "Removing " << identifier << " from cache"
+                       << messaget::eom;
+        log.progress() << "Number of instructions: "
+                       << cached.body.instructions.size() << messaget::eom;
 
         inline_log.cleanup(cached.body);
         cache.erase(identifier);
@@ -438,8 +441,9 @@ void goto_inlinet::expand_function_call(
   {
     if(no_body_set.insert(identifier).second) // newly inserted
     {
-      warning().source_location = function.find_source_location();
-      warning() << "no body for function '" << identifier << "'" << eom;
+      log.warning().source_location = function.find_source_location();
+      log.warning() << "no body for function '" << identifier << "'"
+                    << messaget::eom;
     }
   }
 }
@@ -465,11 +469,11 @@ void goto_inlinet::goto_inline(
 {
   PRECONDITION(check_inline_map(inline_map));
 
-  Forall_goto_functions(f_it, goto_functions)
+  for(auto &gf_entry : goto_functions.function_map)
   {
-    const irep_idt identifier=f_it->first;
+    const irep_idt identifier = gf_entry.first;
     DATA_INVARIANT(!identifier.empty(), "function name must not be empty");
-    goto_functiont &goto_function=f_it->second;
+    goto_functiont &goto_function = gf_entry.second;
 
     if(!goto_function.body_available())
       continue;
@@ -567,9 +571,9 @@ const goto_inlinet::goto_functiont &goto_inlinet::goto_inline_transitive(
   DATA_INVARIANT(
     cached.body.empty(), "body of new function in cache must be empty");
 
-  progress() << "Creating copy of " << identifier << eom;
-  progress() << "Number of instructions: "
-             << goto_function.body.instructions.size() << eom;
+  log.progress() << "Creating copy of " << identifier << messaget::eom;
+  log.progress() << "Number of instructions: "
+                 << goto_function.body.instructions.size() << messaget::eom;
 
   cached.copy_from(goto_function); // location numbers not changed
   inline_log.copy_from(goto_function.body, cached.body);
@@ -664,9 +668,9 @@ bool goto_inlinet::check_inline_map(
 
 bool goto_inlinet::check_inline_map(const inline_mapt &inline_map) const
 {
-  forall_goto_functions(f_it, goto_functions)
+  for(const auto &gf_entry : goto_functions.function_map)
   {
-    if(!check_inline_map(f_it->first, inline_map))
+    if(!check_inline_map(gf_entry.first, inline_map))
       return false;
   }
 

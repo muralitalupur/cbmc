@@ -11,7 +11,9 @@ Author: Daniel Kroening, kroening@kroening.com
 
 #include "dump_c.h"
 
+#include <util/byte_operators.h>
 #include <util/config.h>
+#include <util/expr_initializer.h>
 #include <util/find_symbols.h>
 #include <util/get_base_name.h>
 #include <util/invariant.h>
@@ -435,15 +437,16 @@ void dump_ct::convert_compound(
 
   const irept &bases = type.find(ID_bases);
   std::stringstream base_decls;
-  forall_irep(parent_it, bases.get_sub())
+  for(const auto &parent : bases.get_sub())
   {
     UNREACHABLE;
-    /*
-    assert(parent_it->id() == ID_base);
-    assert(parent_it->get(ID_type) == ID_struct_tag);
+    (void)parent;
+#if 0
+    assert(parent.id() == ID_base);
+    assert(parent.get(ID_type) == ID_struct_tag);
 
     const irep_idt &base_id=
-      parent_it->find(ID_type).get(ID_identifier);
+      parent.find(ID_type).get(ID_identifier);
     const irep_idt &renamed_base_id=global_renaming[base_id];
     const symbolt &parsymb=ns.lookup(renamed_base_id);
 
@@ -451,10 +454,10 @@ void dump_ct::convert_compound(
 
     base_decls << id2string(renamed_base_id) +
       (parent_it+1==bases.get_sub().end()?"":", ");
-      */
+#endif
   }
 
-  /*
+#if 0
   // for the constructor
   string constructor_args;
   string constructor_body;
@@ -470,7 +473,7 @@ void dump_ct::convert_compound(
   constructor_args += "const " + type_to_string(compo.type()) + "& " + component_name;
 
   constructor_body += indent + indent + "this->"+component_name + " = " + component_name + ";\n";
-  */
+#endif
 
   std::stringstream struct_body;
 
@@ -647,19 +650,14 @@ void dump_ct::cleanup_decl(
   std::list<irep_idt> &local_static,
   std::list<irep_idt> &local_type_decls)
 {
-  exprt value=nil_exprt();
-
-  if(decl.operands().size()==2)
-  {
-    value=decl.op1();
-    decl.operands().resize(1);
-  }
-
   goto_programt tmp;
   tmp.add(goto_programt::make_decl(decl.symbol()));
 
-  if(value.is_not_nil())
-    tmp.add(goto_programt::make_assignment(decl.symbol(), value));
+  if(optionalt<exprt> value = decl.initial_value())
+  {
+    decl.set_initial_value({});
+    tmp.add(goto_programt::make_assignment(decl.symbol(), std::move(*value)));
+  }
 
   tmp.add(goto_programt::make_end_function());
 
@@ -1367,24 +1365,26 @@ void dump_ct::cleanup_expr(exprt &expr)
       if(parameters.size()==arguments.size())
       {
         code_typet::parameterst::const_iterator it=parameters.begin();
-        Forall_expr(it2, arguments)
+        for(auto &argument : arguments)
         {
           const typet &type=ns.follow(it->type());
           if(type.id()==ID_union &&
              type.get_bool(ID_C_transparent_union))
           {
-            if(it2->id() == ID_typecast && it2->type() == type)
-              *it2=to_typecast_expr(*it2).op();
+            if(argument.id() == ID_typecast && argument.type() == type)
+              argument = to_typecast_expr(argument).op();
 
             // add a typecast for NULL or 0
-            if(it2->id()==ID_constant &&
-               (it2->is_zero() || to_constant_expr(*it2).get_value()==ID_NULL))
+            if(
+              argument.id() == ID_constant &&
+              (argument.is_zero() ||
+               to_constant_expr(argument).get_value() == ID_NULL))
             {
               const typet &comp_type=
                 to_union_type(type).components().front().type();
 
               if(comp_type.id()==ID_pointer)
-                *it2=typecast_exprt(*it2, comp_type);
+                argument = typecast_exprt(argument, comp_type);
             }
           }
 
@@ -1413,12 +1413,92 @@ void dump_ct::cleanup_expr(exprt &expr)
     }
     #endif
   }
+  else if(
+    expr.id() == ID_byte_update_little_endian ||
+    expr.id() == ID_byte_update_big_endian)
+  {
+    const byte_update_exprt &bu = to_byte_update_expr(expr);
+
+    if(bu.op().id() == ID_union && bu.offset().is_zero())
+    {
+      const union_exprt &union_expr = to_union_expr(bu.op());
+      const union_typet &union_type =
+        to_union_type(ns.follow(union_expr.type()));
+
+      for(const auto &comp : union_type.components())
+      {
+        if(bu.value().type() == comp.type())
+        {
+          exprt member1{ID_member};
+          member1.set(ID_component_name, union_expr.get_component_name());
+          exprt designated_initializer1{ID_designated_initializer};
+          designated_initializer1.add_to_operands(union_expr.op());
+          designated_initializer1.add(ID_designator).move_to_sub(member1);
+
+          exprt member2{ID_member};
+          member2.set(ID_component_name, comp.get_name());
+          exprt designated_initializer2{ID_designated_initializer};
+          designated_initializer2.add_to_operands(bu.value());
+          designated_initializer2.add(ID_designator).move_to_sub(member2);
+
+          binary_exprt initializer_list{std::move(designated_initializer1),
+                                        ID_initializer_list,
+                                        std::move(designated_initializer2)};
+          expr.swap(initializer_list);
+
+          return;
+        }
+      }
+    }
+    else if(
+      bu.op().id() == ID_side_effect &&
+      to_side_effect_expr(bu.op()).get_statement() == ID_nondet &&
+      ns.follow(bu.op().type()).id() == ID_union && bu.offset().is_zero())
+    {
+      const union_typet &union_type = to_union_type(ns.follow(bu.op().type()));
+
+      for(const auto &comp : union_type.components())
+      {
+        if(bu.value().type() == comp.type())
+        {
+          union_exprt union_expr{comp.get_name(), bu.value(), bu.op().type()};
+          expr.swap(union_expr);
+
+          return;
+        }
+      }
+    }
+
+    if(
+      ns.follow(bu.type()).id() == ID_union &&
+      bu.source_location().get_function().empty() &&
+      bu.op() == zero_initializer(bu.op().type(), source_locationt{}, ns)
+                   .value_or(nil_exprt{}))
+    {
+      const union_typet &union_type = to_union_type(ns.follow(bu.type()));
+
+      for(const auto &comp : union_type.components())
+      {
+        if(bu.value().type() == comp.type())
+        {
+          union_exprt union_expr{comp.get_name(), bu.value(), bu.type()};
+          expr.swap(union_expr);
+
+          return;
+        }
+      }
+
+      // we still haven't found a suitable component, so just ignore types and
+      // build an initializer list without designators
+      expr = unary_exprt{ID_initializer_list, bu.value()};
+    }
+  }
 }
 
 void dump_ct::cleanup_type(typet &type)
 {
-  Forall_subtypes(it, type)
-    cleanup_type(*it);
+  for(typet &subtype : to_type_with_subtypes(type).subtypes())
+    cleanup_type(subtype);
 
   if(type.id()==ID_code)
   {

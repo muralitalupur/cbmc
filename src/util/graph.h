@@ -13,7 +13,6 @@ Author: Daniel Kroening, kroening@kroening.com
 #define CPROVER_UTIL_GRAPH_H
 
 #include <algorithm>
-#include <cassert>
 #include <functional>
 #include <iosfwd>
 #include <list>
@@ -632,7 +631,7 @@ std::vector<typename N::node_indext> grapht<N>::get_reachable(
 
     const auto &node = nodes[n];
     const auto &succs = forwards ? node.out : node.in;
-    for(const auto succ : succs)
+    for(const auto &succ : succs)
       if(!visited[succ.first])
         s.push(succ.first);
   }

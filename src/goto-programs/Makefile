@@ -1,4 +1,5 @@
-SRC = adjust_float_expressions.cpp \
+SRC = add_malloc_may_fail_variable_initializations.cpp \
+      adjust_float_expressions.cpp \
       builtin_functions.cpp \
       class_hierarchy.cpp \
       class_identifier.cpp \
@@ -38,6 +39,7 @@ SRC = adjust_float_expressions.cpp \
       parameter_assignments.cpp \
       pointer_arithmetic.cpp \
       printf_formatter.cpp \
+      process_goto_program.cpp \
       read_bin_goto_object.cpp \
       read_goto_binary.cpp \
       rebuild_goto_start_function.cpp \

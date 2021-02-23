@@ -8,9 +8,8 @@ Author: Daniel Kroening, kroening@kroening.com
 
 #include "simplify_expr_class.h"
 
-#include <cassert>
-
 #include "arith_tools.h"
+#include "bitvector_expr.h"
 #include "byte_operators.h"
 #include "config.h"
 #include "expr_util.h"
@@ -19,9 +18,11 @@ Author: Daniel Kroening, kroening@kroening.com
 #include "invariant.h"
 #include "mathematical_types.h"
 #include "namespace.h"
+#include "pointer_expr.h"
 #include "pointer_offset_size.h"
 #include "rational.h"
 #include "rational_tools.h"
+#include "simplify_utils.h"
 #include "std_expr.h"
 
 simplify_exprt::resultt<>
@@ -1056,7 +1057,7 @@ simplify_exprt::simplify_extractbits(const extractbits_exprt &expr)
 
   if(expr.src().is_constant())
   {
-    const auto svalue = expr2bits(expr.src(), true);
+    const auto svalue = expr2bits(expr.src(), true, ns);
 
     if(!svalue.has_value() || svalue->size() != *width)
       return unchanged(expr);
@@ -1065,7 +1066,7 @@ simplify_exprt::simplify_extractbits(const extractbits_exprt &expr)
       numeric_cast_v<std::size_t>(*end),
       numeric_cast_v<std::size_t>(*start - *end + 1));
 
-    auto result = bits2expr(extracted_value, expr.type(), true);
+    auto result = bits2expr(extracted_value, expr.type(), true, ns);
     if(!result.has_value())
       return unchanged(expr);
 
@@ -1414,9 +1415,7 @@ simplify_exprt::resultt<> simplify_exprt::simplify_inequality_both_constant(
   }
 }
 
-bool simplify_exprt::eliminate_common_addends(
-  exprt &op0,
-  exprt &op1)
+static bool eliminate_common_addends(exprt &op0, exprt &op1)
 {
   // we can't eliminate zeros
   if(op0.is_zero() ||
@@ -1515,56 +1514,6 @@ simplify_exprt::resultt<> simplify_exprt::simplify_inequality_no_constant(
   if(expr.op0() == expr.op1())
     return true_exprt();
 
-  // try constants
-
-  value_listt values0, values1;
-
-  bool ok0=!get_values(expr.op0(), values0);
-  bool ok1=!get_values(expr.op1(), values1);
-
-  if(ok0 && ok1)
-  {
-    bool first=true;
-    bool result=false; // dummy initialization to prevent warning
-    bool ok=true;
-
-    // compare possible values
-
-    forall_value_list(it0, values0)
-      forall_value_list(it1, values1)
-      {
-        bool tmp;
-        const mp_integer &int_value0=*it0;
-        const mp_integer &int_value1=*it1;
-
-        if(expr.id()==ID_ge)
-          tmp=(int_value0>=int_value1);
-        else if(expr.id()==ID_equal)
-          tmp=(int_value0==int_value1);
-        else
-        {
-          tmp=false;
-          UNREACHABLE;
-        }
-
-        if(first)
-        {
-          result=tmp;
-          first=false;
-        }
-        else if(result!=tmp)
-        {
-          ok=false;
-          break;
-        }
-      }
-
-    if(ok)
-    {
-      return make_boolean_expr(result);
-    }
-  }
-
   // See if we can eliminate common addends on both sides.
   // On bit-vectors, this is only sound on '='.
   if(expr.id()==ID_equal)
@@ -1647,14 +1596,19 @@ simplify_exprt::resultt<> simplify_exprt::simplify_inequality_rhs_is_constant(
         }
       }
       else if(
-        expr.op0().id() == ID_typecast &&
-        expr.op0().type().id() == ID_pointer &&
-        (to_typecast_expr(expr.op0()).op().type().id() == ID_pointer ||
-         config.ansi_c.NULL_is_zero))
+        expr.op0().id() == ID_typecast && expr.op0().type().id() == ID_pointer)
       {
+        exprt op = to_typecast_expr(expr.op0()).op();
+        if(
+          op.type().id() != ID_pointer &&
+          (!config.ansi_c.NULL_is_zero || !is_number(op.type()) ||
+           op.type().id() == ID_complex))
+        {
+          return unchanged(expr);
+        }
+
         // (type)ptr == NULL -> ptr == NULL
         // note that 'ptr' may be an integer
-        exprt op = to_typecast_expr(expr.op0()).op();
         auto new_expr = expr;
         new_expr.op0().swap(op);
         if(new_expr.op0().type().id() != ID_pointer)

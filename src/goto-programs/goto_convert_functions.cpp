@@ -75,11 +75,13 @@ void goto_convert_functionst::goto_convert(goto_functionst &functions)
 
 bool goto_convert_functionst::hide(const goto_programt &goto_program)
 {
-  forall_goto_program_instructions(i_it, goto_program)
+  for(const auto &instruction : goto_program.instructions)
   {
-    for(const auto &label : i_it->labels)
+    for(const auto &label : instruction.labels)
+    {
       if(label == CPROVER_PREFIX "HIDE")
         return true;
+    }
   }
 
   return false;
@@ -87,6 +89,7 @@ bool goto_convert_functionst::hide(const goto_programt &goto_program)
 
 void goto_convert_functionst::add_return(
   goto_functionst::goto_functiont &f,
+  const typet &return_type,
   const source_locationt &source_location)
 {
 #if 0
@@ -133,7 +136,7 @@ void goto_convert_functionst::add_return(
 
 #endif
 
-  side_effect_expr_nondett rhs(f.type.return_type(), source_location);
+  side_effect_expr_nondett rhs(return_type, source_location);
 
   f.body.add(
     goto_programt::make_return(code_returnt(std::move(rhs)), source_location));
@@ -154,7 +157,6 @@ void goto_convert_functionst::convert_function(
 
   // store the parameter identifiers in the goto functions
   const code_typet &code_type = to_code_type(symbol.type);
-  f.type = code_type;
   f.set_parameter_identifiers(code_type);
 
   if(
@@ -190,15 +192,15 @@ void goto_convert_functionst::convert_function(
 
   targets = targetst();
   targets.set_return(end_function);
-  targets.has_return_value = f.type.return_type().id() != ID_empty &&
-                             f.type.return_type().id() != ID_constructor &&
-                             f.type.return_type().id() != ID_destructor;
+  targets.has_return_value = code_type.return_type().id() != ID_empty &&
+                             code_type.return_type().id() != ID_constructor &&
+                             code_type.return_type().id() != ID_destructor;
 
   goto_convert_rec(code, f.body, mode);
 
   // add non-det return value, if needed
   if(targets.has_return_value)
-    add_return(f, end_location);
+    add_return(f, code_type.return_type(), end_location);
 
   // handle SV-COMP's __VERIFIER_atomic_
   if(
@@ -213,10 +215,10 @@ void goto_convert_functionst::convert_function(
     goto_programt::targett a_end =
       f.body.add(goto_programt::make_atomic_end(end_location));
 
-    Forall_goto_program_instructions(i_it, f.body)
+    for(auto &instruction : f.body.instructions)
     {
-      if(i_it->is_goto() && i_it->get_target()->is_end_function())
-        i_it->set_target(a_end);
+      if(instruction.is_goto() && instruction.get_target()->is_end_function())
+        instruction.set_target(a_end);
     }
   }
 
@@ -226,10 +228,7 @@ void goto_convert_functionst::convert_function(
   f.body.update();
 
   if(hide(f.body))
-  {
     f.make_hidden();
-    symbol_table.get_writeable_ref(identifier).set_hidden();
-  }
 
   lifetime = parent_lifetime;
 }

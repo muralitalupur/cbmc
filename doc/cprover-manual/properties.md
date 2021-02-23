@@ -132,9 +132,10 @@ The goto-instrument program supports these checks:
 As all of these checks apply across the entire input program, we may wish to
 disable them for selected statements in the program. For example, unsigned
 overflows can be expected and acceptable in certain instructions even when
-elsewhere we do not expect them. To selectively disable automatically generated
-properties use `#pragma CPROVER check disable "<name_of_check>"`, which remains
-in effect until a `#pragma CPROVER check pop` (to re-enable all properties
+elsewhere we do not expect them. As of version 5.12, CBMC supports selectively
+disabling automatically generated properties.  To disable property generation,
+use `#pragma CPROVER check disable "<name_of_check>"`, which remains in effect
+until a `#pragma CPROVER check pop` (to re-enable all properties
 disabled before or since the last `#pragma CPROVER check push`) is provided.
 For example, for unsigned overflow checks, use
 ```
@@ -145,6 +146,21 @@ unsigned foo(unsigned x)
   x = x + 1; // immediately follows the pragma, no unsigned overflow check here
 #pragma CPROVER check pop
   x = x + 2; // unsigned overflow checks are generated here
+```
+
+#### Flag --nan-check limitations
+
+Please note that `--nan-check` flag is adding not-a-number checks only for
+generation of NaN value. Current implementation of `--nan-check` flag is not
+providing checks for propagation of NaN values. Generating assertions on type
+casting or structure/union member access is unsupported and such operation
+will not be examined.
+
+For example:
+
+```
+float f = 0.0/0.0; // will generate NaN - CBMC will add assertion
+float g = NAN+0.0; // propagation of NaN value - no assertion generated
 ```
 
 #### Generating function bodies
@@ -211,14 +227,14 @@ Now, we can compile the program and detect that the error functions are indeed
 called by invoking these commands:
 
 ```
-goto-cc error_example.c -o error_example.goto
+goto-cc error_example.c -o error_example.gb
 # Replace all functions ending with _error
 # (Excluding those starting with __)
 # With ones that have an assert(false) body
-goto-instrument error_example.goto error_example_replaced.goto \
+goto-instrument error_example.gb error_example_replaced.gb \
   --generate-function-body '(?!__).*_error' \
   --generate-function-body-options assert-false
-cbmc error_example_replaced.goto
+cbmc error_example_replaced.gb
 ```
 
 This generates the following output:
@@ -261,7 +277,7 @@ int do_something_with_complex(struct Complex *complex);
 And the command line
 
 ```
-goto-instrument in.goto out.goto
+goto-instrument in.gb out.gb
   --generate-function-body do_something_with_complex
   --generate-function-body-options
     'havoc,params:.*,globals:AGlobalComplex'

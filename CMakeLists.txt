@@ -1,5 +1,27 @@
 cmake_minimum_required(VERSION 3.2)
 
+# If cmake generates files inside of the cbmc source directory this can lead to important files being overwritten, so we prevent that here
+if("${CMAKE_BINARY_DIR}" STREQUAL "${CMAKE_SOURCE_DIR}")
+  message(FATAL_ERROR
+    "We have detected that you were trying to invoke cmake with its output"
+    " directory being equal to the source directory.  You may have done this by"
+    " accident by invoking cmake from the cbmc top level directory without"
+    " specifying a build directory.  Since this can lead to cmake overwriting"
+    " files in the source tree, this is prohibited.  Please perform an"
+    " out-of-source build by either creating a separate build directory and"
+    " invoking cmake from there, or specifying a build directory with -B.\n"
+    "(see also: COMPILING.md)\n"
+    "Note that running this command will have created CMakeCache.txt"
+    " and a CMakeFiles directory; You should delete both of them.")
+endif()
+
+# Build a Release version by default (default build flags for each build type
+# are configured below).
+if (NOT EXISTS ${CMAKE_BINARY_DIR}/CMakeCache.txt)
+    if (NOT CMAKE_BUILD_TYPE)
+        set(CMAKE_BUILD_TYPE "Release" CACHE STRING "" FORCE)
+    endif()
+endif()
 
 # Grab the current CBMC version from config.inc
 # We do this so we have a matching cbmc version between the Makefile build and
@@ -58,7 +80,8 @@ endif()
 set(enable_cbmc_tests on CACHE BOOL "Whether CBMC tests should be enabled")
 
 set(sat_impl "minisat2" CACHE STRING
-    "This setting controls the SAT library which is used. Valid values are 'minisat2' and 'glucose'"
+    "This setting controls the SAT library which is used. Valid values are
+    'minisat2', 'glucose', or 'cadical'"
 )
 
 if(${enable_cbmc_tests})
@@ -113,7 +136,6 @@ if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang" OR
             COMMAND ${CODE_COVERAGE_LCOV} ${LCOV_FLAGS} --remove ${CODE_COVERAGE_INFO_FILE} '/usr/*' --output-file ${CODE_COVERAGE_INFO_FILE}
             COMMAND ${CODE_COVERAGE_GENHTML} ${CODE_COVERAGE_INFO_FILE} --output-directory ${CODE_COVERAGE_OUTPUT_DIR}
             DEPENDS
-              java-models-library
               "$<TARGET_FILE:java-unit>"
               "$<TARGET_FILE:unit>"
               "$<TARGET_FILE:goto-harness>"
@@ -127,6 +149,8 @@ if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang" OR
               "$<TARGET_FILE:jbmc>"
               "$<TARGET_FILE:jdiff>"
               "$<TARGET_FILE:smt2_solver>"
+              "$<TARGET_FILE:symtab2gb>"
+              "libour_archive.a"
             WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
         )
     endif()

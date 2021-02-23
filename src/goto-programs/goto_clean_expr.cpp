@@ -15,6 +15,7 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <util/exception_utils.h>
 #include <util/expr_util.h>
 #include <util/fresh_symbol.h>
+#include <util/pointer_expr.h>
 #include <util/simplify_expr.h>
 #include <util/std_expr.h>
 
@@ -387,18 +388,6 @@ void goto_convertt::clean_expr(
         return;
       }
     }
-    else if(statement==ID_function_call)
-    {
-      if(to_side_effect_expr_function_call(expr).function().id()==ID_symbol &&
-         to_symbol_expr(
-           to_side_effect_expr_function_call(expr).
-           function()).get_identifier()=="__noop")
-      {
-        // __noop needs special treatment, as arguments are not
-        // evaluated
-        to_side_effect_expr_function_call(expr).arguments().clear();
-      }
-    }
   }
   else if(expr.id()==ID_forall || expr.id()==ID_exists)
   {
@@ -420,7 +409,8 @@ void goto_convertt::clean_expr(
 
   if(expr.id()==ID_side_effect)
   {
-    remove_side_effect(to_side_effect_expr(expr), dest, mode, result_is_used);
+    remove_side_effect(
+      to_side_effect_expr(expr), dest, mode, result_is_used, false);
   }
   else if(expr.id()==ID_compound_literal)
   {
@@ -493,7 +483,7 @@ void goto_convertt::clean_expr_address_of(
   }
   else if(expr.id() == ID_side_effect)
   {
-    remove_side_effect(to_side_effect_expr(expr), dest, mode, true);
+    remove_side_effect(to_side_effect_expr(expr), dest, mode, true, true);
   }
   else
     Forall_operands(it, expr)

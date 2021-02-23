@@ -23,27 +23,31 @@ void convert(
   if(irep.id()!=ID_nil)
     xml.new_element("id").data=irep.id_string();
 
-  forall_irep(it, irep.get_sub())
+  for(const auto &sub_irep : irep.get_sub())
   {
     xmlt &x_sub=xml.new_element("sub");
-    convert(*it, x_sub);
+    convert(sub_irep, x_sub);
   }
 
-  forall_named_irep(it, irep.get_named_sub())
-    if(!irept::is_comment(it->first))
+  for(const auto &irep_entry : irep.get_named_sub())
+  {
+    if(!irept::is_comment(irep_entry.first))
     {
       xmlt &x_nsub = xml.new_element("named_sub");
-      x_nsub.set_attribute("name", name2string(it->first));
-      convert(it->second, x_nsub);
+      x_nsub.set_attribute("name", name2string(irep_entry.first));
+      convert(irep_entry.second, x_nsub);
     }
+  }
 
-  forall_named_irep(it, irep.get_named_sub())
-    if(!irept::is_comment(it->first))
+  for(const auto &irep_entry : irep.get_named_sub())
+  {
+    if(!irept::is_comment(irep_entry.first))
     {
       xmlt &x_com = xml.new_element("comment");
-      x_com.set_attribute("name", name2string(it->first));
-      convert(it->second, x_com);
+      x_com.set_attribute("name", name2string(irep_entry.first));
+      convert(irep_entry.second, x_com);
     }
+  }
 }
 
 void convert(

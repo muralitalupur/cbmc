@@ -18,6 +18,7 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <util/expr_iterator.h>
 #include <util/find_symbols.h>
 #include <util/invariant.h>
+#include <util/pointer_expr.h>
 #include <util/std_expr.h>
 #include <util/validate.h>
 
@@ -229,17 +230,17 @@ std::ostream &goto_programt::output_instruction(
 void goto_programt::get_decl_identifiers(
   decl_identifierst &decl_identifiers) const
 {
-  forall_goto_program_instructions(it, (*this))
+  for(const auto &instruction : instructions)
   {
-    if(it->is_decl())
+    if(instruction.is_decl())
     {
       DATA_INVARIANT(
-        it->code.get_statement() == ID_decl,
+        instruction.code.get_statement() == ID_decl,
         "expected statement to be declaration statement");
       DATA_INVARIANT(
-        it->code.operands().size() == 1,
+        instruction.code.operands().size() == 1,
         "declaration statement expects one operand");
-      const symbol_exprt &symbol_expr=to_symbol_expr(it->code.op0());
+      const symbol_exprt &symbol_expr = to_symbol_expr(instruction.code.op0());
       decl_identifiers.insert(symbol_expr.get_identifier());
     }
   }
@@ -291,8 +292,8 @@ std::list<exprt> expressions_read(
   case FUNCTION_CALL:
   {
     const code_function_callt &function_call = instruction.get_function_call();
-    forall_expr(it, function_call.arguments())
-      dest.push_back(*it);
+    for(const auto &argument : function_call.arguments())
+      dest.push_back(argument);
     if(function_call.lhs().is_not_nil())
       parse_lhs_read(function_call.lhs(), dest);
     break;
@@ -1093,7 +1094,7 @@ bool goto_programt::equals(const goto_programt &other) const
 
     // the number of targets is the same as instructiont::equals returned "true"
     auto other_target_it = other_it->targets.begin();
-    for(const auto t : ins.targets)
+    for(const auto &t : ins.targets)
     {
       if(
         t->location_number - ins.location_number !=

@@ -11,13 +11,13 @@ Author: Daniel Kroening, kroening@kroening.com
 
 #include "linking.h"
 
-#include <cassert>
 #include <deque>
 #include <unordered_set>
 
 #include <util/base_type.h>
 #include <util/find_symbols.h>
 #include <util/mathematical_types.h>
+#include <util/pointer_expr.h>
 #include <util/pointer_offset_size.h>
 #include <util/simplify_expr.h>
 
@@ -1032,11 +1032,9 @@ void linkingt::duplicate_object_symbol(
 
   // care about initializers
 
-  if(!new_symbol.value.is_nil() &&
-     !new_symbol.value.get_bool(ID_C_zero_initializer))
+  if(!new_symbol.value.is_nil())
   {
     if(old_symbol.value.is_nil() ||
-       old_symbol.value.get_bool(ID_C_zero_initializer) ||
        old_symbol.is_weak)
     {
       // new_symbol wins
@@ -1071,9 +1069,7 @@ void linkingt::duplicate_object_symbol(
       }
     }
   }
-  else if(
-    set_to_new && !old_symbol.value.is_nil() &&
-    !old_symbol.value.get_bool(ID_C_zero_initializer))
+  else if(set_to_new && !old_symbol.value.is_nil())
   {
     // the type has been updated, now make sure that the initialising assignment
     // will have matching types

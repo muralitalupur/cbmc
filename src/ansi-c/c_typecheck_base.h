@@ -12,12 +12,13 @@ Author: Daniel Kroening, kroening@kroening.com
 #ifndef CPROVER_ANSI_C_C_TYPECHECK_BASE_H
 #define CPROVER_ANSI_C_C_TYPECHECK_BASE_H
 
-#include <util/symbol_table.h>
-#include <util/typecheck.h>
+#include <util/bitvector_expr.h>
 #include <util/namespace.h>
 #include <util/std_code.h>
 #include <util/std_expr.h>
 #include <util/std_types.h>
+#include <util/symbol_table.h>
+#include <util/typecheck.h>
 
 #include "ansi_c_declaration.h"
 #include "designator.h"
@@ -144,6 +145,11 @@ protected:
   virtual void typecheck_dowhile(code_dowhilet &code);
   virtual void typecheck_start_thread(codet &code);
   virtual void typecheck_spec_expr(codet &code, const irep_idt &spec);
+  virtual void
+  typecheck_assigns(const code_typet &function_declarator, const irept &spec);
+  virtual void
+  typecheck_assigns(const ansi_c_declaratort &declarator, const exprt &assigns);
+  virtual void typecheck_assigns_exprs(codet &code, const irep_idt &spec);
 
   bool break_is_allowed;
   bool continue_is_allowed;

@@ -9,7 +9,6 @@ Author: Daniel Kroening, kroening@kroening.com
 #include "expr2c.h"
 
 #include <algorithm>
-#include <cassert>
 #include <sstream>
 
 #include <map>
@@ -20,9 +19,11 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <util/cprover_prefix.h>
 #include <util/find_symbols.h>
 #include <util/fixedbv.h>
+#include <util/floatbv_expr.h>
 #include <util/lispexpr.h>
 #include <util/lispirep.h>
 #include <util/namespace.h>
+#include <util/pointer_expr.h>
 #include <util/pointer_offset_size.h>
 #include <util/pointer_predicates.h>
 #include <util/prefix.h>
@@ -44,7 +45,9 @@ expr2c_configurationt expr2c_configurationt::default_configuration
   true,
   "TRUE",
   "FALSE",
-  true
+  true,
+  false,
+  false
 };
 
 expr2c_configurationt expr2c_configurationt::clean_configuration
@@ -54,7 +57,9 @@ expr2c_configurationt expr2c_configurationt::clean_configuration
   false,
   "1",
   "0",
-  false
+  false,
+  true,
+  true
 };
 
 // clang-format on
@@ -197,7 +202,7 @@ std::string expr2ct::convert_rec(
 
   std::string d = declarator.empty() ? declarator : " " + declarator;
 
-  if(src.find(ID_C_typedef).is_not_nil())
+  if(!configuration.expand_typedef && src.find(ID_C_typedef).is_not_nil())
   {
     return q+id2string(src.get(ID_C_typedef))+d;
   }
@@ -379,21 +384,27 @@ std::string expr2ct::convert_rec(
 
     if(!to_c_enum_type(src).is_incomplete())
     {
+      const c_enum_typet &c_enum_type = to_c_enum_type(src);
+      const bool is_signed = c_enum_type.subtype().id() == ID_signedbv;
+      const auto width = to_bitvector_type(c_enum_type.subtype()).get_width();
+
       result += '{';
 
       // add members
-      const c_enum_typet::memberst &members = to_c_enum_type(src).members();
+      const c_enum_typet::memberst &members = c_enum_type.members();
 
       for(c_enum_typet::memberst::const_iterator it = members.begin();
           it != members.end();
           it++)
       {
+        mp_integer int_value = bvrep2integer(it->get_value(), width, is_signed);
+
         if(it != members.begin())
           result += ',';
         result += ' ';
         result += id2string(it->get_base_name());
         result += '=';
-        result += id2string(it->get_value());
+        result += integer2string(int_value);
       }
 
       result += " }";
@@ -1704,25 +1715,29 @@ std::string expr2ct::convert_constant(
     if(c_enum_type.id()!=ID_c_enum)
       return convert_norep(src, precedence);
 
+    if(!configuration.print_enum_int_value)
+    {
+      const c_enum_typet::memberst &members =
+        to_c_enum_type(c_enum_type).members();
+
+      for(const auto &member : members)
+      {
+        if(member.get_value() == value)
+          return "/*enum*/" + id2string(member.get_base_name());
+      }
+    }
+
+    // lookup failed or enum is to be output as integer
     const bool is_signed = c_enum_type.subtype().id() == ID_signedbv;
     const auto width = to_bitvector_type(c_enum_type.subtype()).get_width();
 
-    mp_integer int_value = bvrep2integer(value, width, is_signed);
-    mp_integer i=0;
+    std::string value_as_string =
+      integer2string(bvrep2integer(value, width, is_signed));
 
-    irep_idt int_value_string=integer2string(int_value);
-
-    const c_enum_typet::memberst &members=
-      to_c_enum_type(c_enum_type).members();
-
-    for(const auto &member : members)
-    {
-      if(member.get_value() == int_value_string)
-        return "/*enum*/" + id2string(member.get_base_name());
-    }
-
-    // failed...
-    return "/*enum*/"+integer2string(int_value);
+    if(configuration.print_enum_int_value)
+      return value_as_string;
+    else
+      return "/*enum*/" + value_as_string;
   }
   else if(type.id()==ID_rational)
     return convert_norep(src, precedence);
@@ -1896,12 +1911,8 @@ std::string expr2ct::convert_constant(
       if(type.subtype().id()!=ID_empty)
         dest="(("+convert(type)+")"+dest+")";
     }
-    else
+    else if(src.operands().size() == 1)
     {
-      // we prefer the annotation
-      if(src.operands().size()!=1)
-        return convert_norep(src, precedence);
-
       const auto &annotation = to_unary_expr(src).op();
 
       if(annotation.id() == ID_constant)
@@ -1917,6 +1928,12 @@ std::string expr2ct::convert_constant(
       }
       else
         return convert_with_precedence(annotation, precedence);
+    }
+    else
+    {
+      const auto width = to_pointer_type(type).get_width();
+      mp_integer int_value = bvrep2integer(value, width, false);
+      return "(" + convert(type) + ")" + integer2string(int_value);
     }
   }
   else if(type.id()==ID_string)
@@ -2265,10 +2282,36 @@ std::string expr2ct::convert_designated_initializer(const exprt &src)
     return convert_norep(src, precedence);
   }
 
-  std::string dest=".";
-  // TODO it->find(ID_member)
+  const exprt &value = to_unary_expr(src).op();
+
+  const exprt &designator = static_cast<const exprt &>(src.find(ID_designator));
+  if(designator.operands().size() != 1)
+  {
+    unsigned precedence;
+    return convert_norep(src, precedence);
+  }
+
+  const exprt &designator_id = to_unary_expr(designator).op();
+
+  std::string dest;
+
+  if(designator_id.id() == ID_member)
+  {
+    dest = "." + id2string(designator_id.get(ID_component_name));
+  }
+  else if(
+    designator_id.id() == ID_index && designator_id.operands().size() == 1)
+  {
+    dest = "[" + convert(to_unary_expr(designator_id).op()) + "]";
+  }
+  else
+  {
+    unsigned precedence;
+    return convert_norep(src, precedence);
+  }
+
   dest+='=';
-  dest += convert(to_unary_expr(src).op());
+  dest += convert(value);
 
   return dest;
 }

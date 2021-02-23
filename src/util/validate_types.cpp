@@ -46,11 +46,18 @@ void call_on_type(const typet &type, Args &&... args)
   }
   else if(type.id() == ID_pointer)
   {
-    CALL_ON_TYPE(pointer_typet);
+    if(type.get_bool(ID_C_reference))
+      CALL_ON_TYPE(reference_typet);
+    else
+      CALL_ON_TYPE(pointer_typet);
   }
   else if(type.id() == ID_c_bool)
   {
     CALL_ON_TYPE(c_bool_typet);
+  }
+  else if(type.id() == ID_array)
+  {
+    CALL_ON_TYPE(array_typet);
   }
   else
   {

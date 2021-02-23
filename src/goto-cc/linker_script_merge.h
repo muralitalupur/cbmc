@@ -8,9 +8,14 @@
 #include <functional>
 
 #include <util/json.h>
+#include <util/message.h>
+#include <util/std_expr.h>
 
-#include "compile.h"
 #include "gcc_cmdline.h"
+
+class goto_modelt;
+class goto_programt;
+class symbol_tablet;
 
 /// \brief Patterns of expressions that should be replaced
 ///
@@ -59,7 +64,7 @@ private:
 };
 
 /// \brief Synthesise definitions of symbols that are defined in linker scripts
-class linker_script_merget:public messaget
+class linker_script_merget
 {
 public:
   /// \brief Add values of linkerscript-defined symbols to the goto-binary
@@ -79,17 +84,16 @@ public:
   typedef std::map<irep_idt, std::pair<symbol_exprt, exprt>> linker_valuest;
 
   linker_script_merget(
-    compilet &,
     const std::string &elf_binary,
     const std::string &goto_binary,
     const cmdlinet &,
     message_handlert &);
 
 protected:
-  compilet &compiler;
   const std::string &elf_binary;
   const std::string &goto_binary;
   const cmdlinet &cmdline;
+  messaget log;
 
   /// \brief The "shapes" of expressions to be replaced by a pointer
   ///

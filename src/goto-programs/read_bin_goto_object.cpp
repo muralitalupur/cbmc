@@ -74,10 +74,7 @@ static bool read_bin_goto_object(
     {
       // makes sure there is an empty function for every function symbol
       auto entry = functions.function_map.emplace(sym.name, goto_functiont());
-
-      const code_typet &code_type = to_code_type(sym.type);
-      entry.first->second.type = code_type;
-      entry.first->second.set_parameter_identifiers(code_type);
+      entry.first->second.set_parameter_identifiers(to_code_type(sym.type));
     }
 
     symbol_table.add(sym);
@@ -131,8 +128,8 @@ static bool read_bin_goto_object(
         instruction.labels.push_back(label);
         if(label == CPROVER_PREFIX "HIDE")
           hidden=true;
-        // The above info is normally in the type of the goto_functiont object,
-        // which should likely be stored in the binary.
+        // The above info is also held in the goto_functiont object, and could
+        // be stored in the binary.
       }
     }
 
@@ -160,15 +157,7 @@ static bool read_bin_goto_object(
     f.body.update();
 
     if(hidden)
-    {
       f.make_hidden();
-      // can be removed with the next goto-binary version update as the
-      // information is guaranteed to be stored in the symbol table
-#if GOTO_BINARY_VERSION > 5
-#error This code should be removed
-#endif
-      symbol_table.get_writeable_ref(fname).set_hidden();
-    }
   }
 
   functions.compute_location_numbers();

@@ -852,7 +852,15 @@ or_eq               { return cpp98_keyword(TOK_ORASSIGN); }
 private             { return cpp98_keyword(TOK_PRIVATE); }
 protected           { return cpp98_keyword(TOK_PROTECTED); }
 public              { return cpp98_keyword(TOK_PUBLIC); }
-static_assert       { return cpp11_keyword(TOK_STATIC_ASSERT); } // C++11
+static_assert       { // C++11, but Visual Studio supports it in all modes (and
+                      // doesn't support _Static_assert)
+                      if(PARSER.mode == configt::ansi_ct::flavourt::VISUAL_STUDIO)
+                      {
+                        loc(); return TOK_STATIC_ASSERT;
+                      }
+                      else
+                        return cpp11_keyword(TOK_STATIC_ASSERT);
+                    }
 template            { return cpp98_keyword(TOK_TEMPLATE); }
 this                { return cpp98_keyword(TOK_THIS); }
 thread_local        { return cpp11_keyword(TOK_THREAD_LOCAL); } // C++11
@@ -1277,6 +1285,7 @@ __decltype          { if(PARSER.cpp98 &&
 {CPROVER_PREFIX}"loop_invariant" { loc(); return TOK_CPROVER_LOOP_INVARIANT; }
 {CPROVER_PREFIX}"requires"     { loc(); return TOK_CPROVER_REQUIRES; }
 {CPROVER_PREFIX}"ensures"      { loc(); return TOK_CPROVER_ENSURES; }
+{CPROVER_PREFIX}"assigns"      { loc(); return TOK_CPROVER_ASSIGNS; }
 
 "\xe2\x88\x80" |
 "\\forall"      { /* Non-standard, obviously. Found in ACSL syntax. */
@@ -1286,6 +1295,10 @@ __decltype          { if(PARSER.cpp98 &&
 "\xe2\x88\x83" |
 "\\exists"      { /* Non-standard, obviously. Found in ACSL syntax. */
                   loc(); return TOK_ACSL_EXISTS;
+                }
+
+"\\lambda"      { /* Non-standard, obviously. Found in ACSL syntax. */
+                  loc(); return TOK_ACSL_LAMBDA;
                 }
 
 "\\let"         { /* Non-standard, obviously. Found in ACSL syntax. */

@@ -11,7 +11,6 @@ Author: Daniel Kroening, kroening@kroening.com
 
 #include "value_set.h"
 
-#include <cassert>
 #include <ostream>
 
 #include <util/arith_tools.h>
@@ -19,6 +18,7 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <util/c_types.h>
 #include <util/format_expr.h>
 #include <util/format_type.h>
+#include <util/pointer_expr.h>
 #include <util/pointer_offset_size.h>
 #include <util/prefix.h>
 #include <util/range.h>
@@ -131,14 +131,6 @@ bool value_sett::insert(
     new_offset.reset();
 
   return true;
-}
-
-void value_sett::output(
-  const namespacet &,
-  std::ostream &out,
-  const std::string &indent) const
-{
-  output(out, indent);
 }
 
 void value_sett::output(std::ostream &out, const std::string &indent) const
@@ -356,44 +348,12 @@ bool value_sett::eval_pointer_offset(
   return mod;
 }
 
-void value_sett::get_value_set(
-  exprt expr,
-  value_setst::valuest &dest,
-  const namespacet &ns) const
-{
-  object_mapt object_map = get_value_set(std::move(expr), ns, false);
-
-  for(object_map_dt::const_iterator
-      it=object_map.read().begin();
-      it!=object_map.read().end();
-      it++)
-    dest.push_back(to_expr(*it));
-
-  #if 0
-  for(value_setst::valuest::const_iterator it=dest.begin();
-      it!=dest.end(); it++)
-    std::cout << "GET_VALUE_SET: " << format(*it) << '\n';
-  #endif
-}
-
 std::vector<exprt>
 value_sett::get_value_set(exprt expr, const namespacet &ns) const
 {
   const object_mapt object_map = get_value_set(std::move(expr), ns, false);
   return make_range(object_map.read())
     .map([&](const object_map_dt::value_type &pair) { return to_expr(pair); });
-}
-
-void value_sett::get_value_set(
-  exprt expr,
-  object_mapt &dest,
-  const namespacet &ns,
-  bool is_simplified) const
-{
-  if(!is_simplified)
-    simplify(expr, ns);
-
-  get_value_set_rec(expr, dest, "", expr.type(), ns);
 }
 
 value_sett::object_mapt value_sett::get_value_set(
@@ -466,14 +426,17 @@ optionalt<irep_idt> value_sett::get_index_of_symbol(
     const struct_union_typet &struct_union_type =
       to_struct_union_type(followed_type);
 
-    const irep_idt &first_component_name =
-      struct_union_type.components().front().get_name();
+    if(!struct_union_type.components().empty())
+    {
+      const irep_idt &first_component_name =
+        struct_union_type.components().front().get_name();
 
-    index =
-      id2string(identifier) + "." + id2string(first_component_name) + suffix;
-    entry = find_entry(index);
-    if(entry)
-      return std::move(index);
+      index =
+        id2string(identifier) + "." + id2string(first_component_name) + suffix;
+      entry = find_entry(index);
+      if(entry)
+        return std::move(index);
+    }
   }
 
   // not found? try without suffix
@@ -491,10 +454,10 @@ void value_sett::get_value_set_rec(
   const typet &original_type,
   const namespacet &ns) const
 {
-  #if 0
+#ifdef DEBUG
   std::cout << "GET_VALUE_SET_REC EXPR: " << format(expr) << "\n";
   std::cout << "GET_VALUE_SET_REC SUFFIX: " << suffix << '\n';
-  #endif
+#endif
 
   const typet &expr_type=ns.follow(expr.type());
 
@@ -1051,10 +1014,10 @@ void value_sett::get_reference_set_rec(
   object_mapt &dest,
   const namespacet &ns) const
 {
-  #if 0
+#ifdef DEBUG
   std::cout << "GET_REFERENCE_SET_REC EXPR: " << format(expr)
             << '\n';
-  #endif
+#endif
 
   if(expr.id()==ID_symbol ||
      expr.id()==ID_dynamic_object ||
@@ -1075,10 +1038,12 @@ void value_sett::get_reference_set_rec(
 
     get_value_set_rec(pointer, dest, "", pointer.type(), ns);
 
-#if 0
-    for(expr_sett::const_iterator it=value_set.begin();
-        it!=value_set.end(); it++)
-      std::cout << "VALUE_SET: " << format(*it) << '\n';
+#ifdef DEBUG
+    for(const auto &map_entry : dest.read())
+    {
+      std::cout << "VALUE_SET: " << format(object_numbering[map_entry.first])
+                << '\n';
+    }
 #endif
 
     return;
@@ -1207,21 +1172,20 @@ void value_sett::assign(
   bool is_simplified,
   bool add_to_sets)
 {
-#if 0
+#ifdef DEBUG
   std::cout << "ASSIGN LHS: " << format(lhs) << " : "
             << format(lhs.type()) << '\n';
   std::cout << "ASSIGN RHS: " << format(rhs) << " : "
             << format(rhs.type()) << '\n';
   std::cout << "--------------------------------------------\n";
-  output(ns, std::cout);
+  output(std::cout);
 #endif
 
   const typet &type=ns.follow(lhs.type());
 
-  if(type.id()==ID_struct ||
-     type.id()==ID_union)
+  if(type.id() == ID_struct)
   {
-    for(const auto &c : to_struct_union_type(type).components())
+    for(const auto &c : to_struct_type(type).components())
     {
       const typet &subtype = c.type();
       const irep_idt &name = c.get_name();
@@ -1250,10 +1214,10 @@ void value_sett::assign(
           "rhs.type():\n" +
             rhs.type().pretty() + "\n" + "lhs.type():\n" + lhs.type().pretty());
 
-        const struct_union_typet &rhs_struct_union_type =
-          to_struct_union_type(ns.follow(rhs.type()));
+        const struct_typet &rhs_struct_type =
+          to_struct_type(ns.follow(rhs.type()));
 
-        const typet &rhs_subtype = rhs_struct_union_type.component_type(name);
+        const typet &rhs_subtype = rhs_struct_type.component_type(name);
         rhs_member = simplify_expr(member_exprt{rhs, name, rhs_subtype}, ns);
 
         assign(lhs_member, rhs_member, ns, true, add_to_sets);
@@ -1322,7 +1286,7 @@ void value_sett::assign(
   }
   else
   {
-    // basic type
+    // basic type or union
     object_mapt values_rhs = get_value_set(rhs, ns, is_simplified);
 
     // Permit custom subclass to alter the read values prior to write:
@@ -1342,7 +1306,7 @@ void value_sett::assign_rec(
   const namespacet &ns,
   bool add_to_sets)
 {
-  #if 0
+#ifdef DEBUG
   std::cout << "ASSIGN_REC LHS: " << format(lhs) << '\n';
   std::cout << "ASSIGN_REC LHS ID: " << lhs.id() << '\n';
   std::cout << "ASSIGN_REC SUFFIX: " << suffix << '\n';
@@ -1353,7 +1317,7 @@ void value_sett::assign_rec(
     std::cout << "ASSIGN_REC RHS: " <<
       format(object_numbering[it->first]) << '\n';
   std::cout << '\n';
-  #endif
+#endif
 
   if(lhs.id()==ID_symbol)
   {

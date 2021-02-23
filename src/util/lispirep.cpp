@@ -46,7 +46,7 @@ void irep2lisp(const irept &src, lispexprt &dest)
   dest.value.clear();
   dest.type=lispexprt::List;
 
-#ifdef NAMED_SUB_IS_FORWARD_LIST
+#if NAMED_SUB_IS_FORWARD_LIST
   const std::size_t named_sub_size =
     std::distance(src.get_named_sub().begin(), src.get_named_sub().end());
 #else
@@ -61,7 +61,7 @@ void irep2lisp(const irept &src, lispexprt &dest)
 
   // reserve objects for extra performance
 
-  forall_irep(it, src.get_sub())
+  for(const auto &irep : src.get_sub())
   {
     lispexprt name;
     name.type=lispexprt::String;
@@ -70,20 +70,20 @@ void irep2lisp(const irept &src, lispexprt &dest)
 
     lispexprt sub;
 
-    irep2lisp(*it, sub);
+    irep2lisp(irep, sub);
     dest.push_back(sub);
   }
 
-  forall_named_irep(it, src.get_named_sub())
+  for(const auto &irep_entry : src.get_named_sub())
   {
     lispexprt name;
     name.type=lispexprt::String;
-    name.value=name2string(it->first);
+    name.value = name2string(irep_entry.first);
     dest.push_back(name);
 
     lispexprt sub;
 
-    irep2lisp(it->second, sub);
+    irep2lisp(irep_entry.second, sub);
     dest.push_back(sub);
   }
 

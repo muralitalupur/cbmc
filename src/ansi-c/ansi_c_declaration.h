@@ -12,8 +12,6 @@ Author: Daniel Kroening, kroening@kroening.com
 #ifndef CPROVER_ANSI_C_ANSI_C_DECLARATION_H
 #define CPROVER_ANSI_C_ANSI_C_DECLARATION_H
 
-#include <cassert>
-
 #include <util/std_expr.h>
 #include <util/symbol.h>
 
@@ -243,6 +241,21 @@ public:
   {
     assert(!declarators().empty());
     declarators().back().value().swap(value);
+  }
+
+  const exprt &spec_assigns() const
+  {
+    return static_cast<const exprt &>(find(ID_C_spec_assigns));
+  }
+
+  const exprt &spec_requires() const
+  {
+    return static_cast<const exprt &>(find(ID_C_spec_requires));
+  }
+
+  const exprt &spec_ensures() const
+  {
+    return static_cast<const exprt &>(find(ID_C_spec_ensures));
   }
 };
 

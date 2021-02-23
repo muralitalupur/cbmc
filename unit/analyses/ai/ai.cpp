@@ -38,9 +38,9 @@ public:
 
   void transform(
     const irep_idt &,
-    locationt,
+    trace_ptrt,
     const irep_idt &,
-    locationt,
+    trace_ptrt,
     ai_baset &,
     const namespacet &) override
   {
@@ -250,9 +250,9 @@ SCENARIO(
 
     THEN("No state should be bottom")
     {
-      forall_goto_functions(f_it, goto_model.goto_functions)
+      for(const auto &gf_entry : goto_model.goto_functions.function_map)
       {
-        forall_goto_program_instructions(i_it, f_it->second.body)
+        forall_goto_program_instructions(i_it, gf_entry.second.body)
         {
           REQUIRE_FALSE(example_analysis[i_it].is_bottom());
         }

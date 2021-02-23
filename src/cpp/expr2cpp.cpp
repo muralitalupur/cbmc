@@ -8,8 +8,6 @@ Author: Daniel Kroening, kroening@cs.cmu.edu
 
 #include "expr2cpp.h"
 
-#include <cassert>
-
 #include <util/std_types.h>
 #include <util/std_expr.h>
 #include <util/symbol.h>
@@ -234,7 +232,7 @@ std::string expr2cppt::convert_rec(
 
     const irept::subt &arguments=src.find(ID_arguments).get_sub();
 
-    forall_irep(it, arguments)
+    for(auto it = arguments.begin(); it != arguments.end(); ++it)
     {
       if(it!=arguments.begin())
         dest+=", ";

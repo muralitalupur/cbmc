@@ -17,6 +17,8 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <util/c_types.h>
 #include <util/exception_utils.h>
 #include <util/expr_util.h>
+#include <util/message.h>
+#include <util/pointer_expr.h>
 #include <util/pointer_predicates.h>
 #include <util/string_constant.h>
 
@@ -44,8 +46,9 @@ bool string_abstractiont::build_wrap(
     !(dest.type().id() == ID_array && a_t.id() == ID_pointer &&
       dest.type().subtype() == a_t.subtype()))
   {
-    warning() << "warning: inconsistent abstract type for "
-              << object.pretty() << eom;
+    messaget log{message_handler};
+    log.warning() << "warning: inconsistent abstract type for "
+                  << object.pretty() << messaget::eom;
     return true;
   }
 
@@ -92,13 +95,13 @@ void string_abstraction(
 
 string_abstractiont::string_abstractiont(
   symbol_tablet &_symbol_table,
-  message_handlert &_message_handler):
-  messaget(_message_handler),
-  arg_suffix("#strarg"),
-  sym_suffix("#str$fcn"),
-  symbol_table(_symbol_table),
-  ns(_symbol_table),
-  temporary_counter(0)
+  message_handlert &_message_handler)
+  : arg_suffix("#strarg"),
+    sym_suffix("#str$fcn"),
+    symbol_table(_symbol_table),
+    ns(_symbol_table),
+    temporary_counter(0),
+    message_handler(_message_handler)
 {
   struct_typet s({{"is_zero", build_type(whatt::IS_ZERO)},
                   {"length", build_type(whatt::LENGTH)},
@@ -126,11 +129,11 @@ typet string_abstractiont::build_type(whatt what)
 
 void string_abstractiont::operator()(goto_functionst &dest)
 {
-  Forall_goto_functions(it, dest)
+  for(auto &gf_entry : dest.function_map)
   {
-    sym_suffix="#str$"+id2string(it->first);
-    add_str_arguments(it->first, it->second);
-    abstract(it->second.body);
+    sym_suffix = "#str$" + id2string(gf_entry.first);
+    add_str_arguments(gf_entry.first, gf_entry.second);
+    abstract(gf_entry.second.body);
     current_args.clear();
   }
 

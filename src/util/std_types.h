@@ -400,6 +400,14 @@ public:
     : struct_union_typet(ID_union, std::move(_components))
   {
   }
+
+  /// Determine the member of maximum bit width in a union type. If no member,
+  /// or a member of non-fixed width can be found, return nullopt.
+  /// \param ns: Namespace to resolve tag types.
+  /// \return Pair of a componentt pointing to the maximum fixed bit-width
+  ///   member of the union type and the bit width of that member.
+  optionalt<std::pair<struct_union_typet::componentt, mp_integer>>
+  find_widest_union_component(const namespacet &ns) const;
 };
 
 /// Check whether a reference to a typet is a \ref union_typet.
@@ -752,11 +760,6 @@ public:
   class parametert:public exprt
   {
   public:
-    DEPRECATED(SINCE(2018, 9, 21, "use parametert(type) instead"))
-    parametert():exprt(ID_parameter)
-    {
-    }
-
     explicit parametert(const typet &type):exprt(ID_parameter, type)
     {
     }
@@ -989,6 +992,10 @@ public:
   {
     return size().is_nil();
   }
+
+  static void check(
+    const typet &type,
+    const validation_modet vm = validation_modet::INVARIANT);
 };
 
 /// Check whether a reference to a typet is a \ref array_typet.
@@ -1557,6 +1564,19 @@ public:
   {
     set(ID_C_reference, true);
   }
+
+  static void check(
+    const typet &type,
+    const validation_modet vm = validation_modet::INVARIANT)
+  {
+    PRECONDITION(type.id() == ID_pointer);
+    const reference_typet &reference_type =
+      static_cast<const reference_typet &>(type);
+    DATA_CHECK(
+      vm, !reference_type.get(ID_width).empty(), "reference must have width");
+    DATA_CHECK(
+      vm, reference_type.get_width() > 0, "reference must have non-zero width");
+  }
 };
 
 /// Check whether a reference to a typet is a \ref reference_typet.
@@ -1566,12 +1586,6 @@ template <>
 inline bool can_cast_type<reference_typet>(const typet &type)
 {
   return can_cast_type<pointer_typet>(type) && type.get_bool(ID_C_reference);
-}
-
-inline void validate_type(const reference_typet &type)
-{
-  DATA_INVARIANT(!type.get(ID_width).empty(), "reference must have width");
-  DATA_INVARIANT(type.get_width() > 0, "reference must have non-zero width");
 }
 
 /// \brief Cast a typet to a \ref reference_typet

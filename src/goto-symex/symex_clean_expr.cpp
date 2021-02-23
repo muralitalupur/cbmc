@@ -60,9 +60,8 @@ process_array_expr(exprt &expr, bool do_simplify, const namespacet &ns)
     expr.swap(tmp);
     process_array_expr(expr, do_simplify, ns);
   }
-  else if(expr.id()==ID_symbol &&
-          expr.get_bool(ID_C_SSA_symbol) &&
-          to_ssa_expr(expr).get_original_expr().id()==ID_index)
+  else if(
+    is_ssa_expr(expr) && to_ssa_expr(expr).get_original_expr().id() == ID_index)
   {
     const ssa_exprt &ssa=to_ssa_expr(expr);
     const index_exprt &index_expr=to_index_expr(ssa.get_original_expr());
@@ -113,7 +112,12 @@ process_array_expr(exprt &expr, bool do_simplify, const namespacet &ns)
       exprt subtype_size = typecast_exprt::conditional_cast(
         subtype_size_opt.value(), array_size_type);
       new_offset = div_exprt(new_offset, subtype_size);
-      minus_exprt new_size(prev_array_type.size(), new_offset);
+      minus_exprt subtraction{prev_array_type.size(), new_offset};
+      if_exprt new_size{
+        binary_predicate_exprt{
+          subtraction, ID_ge, from_integer(0, subtraction.type())},
+        subtraction,
+        from_integer(0, subtraction.type())};
       if(do_simplify)
         simplify(new_size, ns);
 
@@ -134,9 +138,9 @@ void goto_symext::process_array_expr(statet &state, exprt &expr)
   symex_dereference_statet symex_dereference_state(state, ns);
 
   value_set_dereferencet dereference(
-    ns, state.symbol_table, symex_dereference_state, language_mode, false);
+    ns, state.symbol_table, symex_dereference_state, language_mode, false, log);
 
-  expr = dereference.dereference(expr);
+  expr = dereference.dereference(expr, symex_config.show_points_to_sets);
   lift_lets(state, expr);
 
   ::process_array_expr(expr, symex_config.simplify_opt, ns);

@@ -11,12 +11,11 @@ Author: Daniel Kroening, kroening@kroening.com
 
 #include "remove_function_pointers.h"
 
-#include <cassert>
-
 #include <util/c_types.h>
 #include <util/fresh_symbol.h>
 #include <util/invariant.h>
 #include <util/message.h>
+#include <util/pointer_expr.h>
 #include <util/pointer_offset_size.h>
 #include <util/replace_expr.h>
 #include <util/source_location.h>
@@ -124,8 +123,11 @@ remove_function_pointerst::remove_function_pointerst(
   compute_address_taken_functions(goto_functions, address_taken);
 
   // build type map
-  forall_goto_functions(f_it, goto_functions)
-    type_map.emplace(f_it->first, f_it->second.type);
+  for(const auto &gf_entry : goto_functions.function_map)
+  {
+    type_map.emplace(
+      gf_entry.first, to_code_type(ns.lookup(gf_entry.first).type));
+  }
 }
 
 bool remove_function_pointerst::arg_is_type_compatible(
@@ -280,9 +282,10 @@ void remove_function_pointerst::remove_function_pointer(
      call_type.parameters().empty())
   {
     call_type.remove_ellipsis();
-    forall_expr(it, code.arguments())
-      call_type.parameters().push_back(
-        code_typet::parametert(it->type()));
+    for(const auto &argument : code.arguments())
+    {
+      call_type.parameters().push_back(code_typet::parametert(argument.type()));
+    }
   }
 
   bool found_functions;
@@ -426,15 +429,17 @@ void remove_function_pointerst::remove_function_pointer(
   new_code.destructive_append(final_skip);
 
   // set locations
-  Forall_goto_program_instructions(it, new_code)
+  for(auto &instruction : new_code.instructions)
   {
-    irep_idt property_class=it->source_location.get_property_class();
-    irep_idt comment=it->source_location.get_comment();
-    it->source_location=target->source_location;
+    source_locationt &source_location = instruction.source_location;
+
+    irep_idt property_class = source_location.get_property_class();
+    irep_idt comment = source_location.get_comment();
+    source_location = target->source_location;
     if(!property_class.empty())
-      it->source_location.set_property_class(property_class);
+      source_location.set_property_class(property_class);
     if(!comment.empty())
-      it->source_location.set_comment(comment);
+      source_location.set_comment(comment);
   }
 
   goto_programt::targett next_target=target;

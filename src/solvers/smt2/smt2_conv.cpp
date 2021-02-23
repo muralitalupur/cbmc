@@ -12,6 +12,7 @@ Author: Daniel Kroening, kroening@kroening.com
 #include "smt2_conv.h"
 
 #include <util/arith_tools.h>
+#include <util/bitvector_expr.h>
 #include <util/c_types.h>
 #include <util/config.h>
 #include <util/expr_iterator.h>
@@ -21,6 +22,7 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <util/ieee_float.h>
 #include <util/invariant.h>
 #include <util/mathematical_expr.h>
+#include <util/pointer_expr.h>
 #include <util/pointer_offset_size.h>
 #include <util/range.h>
 #include <util/std_expr.h>
@@ -1356,6 +1358,46 @@ void smt2_convt::convert_expr(const exprt &expr)
           type.id_string());
 
       out << ")"; // bv*sh
+    }
+    else
+      UNEXPECTEDCASE(
+        "unsupported type for " + shift_expr.id_string() + ": " +
+        type.id_string());
+  }
+  else if(expr.id() == ID_rol || expr.id() == ID_ror)
+  {
+    const shift_exprt &shift_expr = to_shift_expr(expr);
+    const typet &type = shift_expr.type();
+
+    if(
+      type.id() == ID_unsignedbv || type.id() == ID_signedbv ||
+      type.id() == ID_bv)
+    {
+      // SMT-LIB offers rotate_left and rotate_right, but these require a
+      // constant distance.
+      if(shift_expr.id() == ID_rol)
+        out << "((_ rotate_left";
+      else if(shift_expr.id() == ID_ror)
+        out << "((_ rotate_right";
+      else
+        UNREACHABLE;
+
+      out << ' ';
+
+      auto distance_int_op = numeric_cast<mp_integer>(shift_expr.distance());
+
+      if(distance_int_op.has_value())
+      {
+        out << distance_int_op.value();
+      }
+      else
+        UNEXPECTEDCASE(
+          "distance type for " + shift_expr.id_string() + "must be constant");
+
+      out << ") ";
+      convert_expr(shift_expr.op());
+
+      out << ")"; // rotate_*
     }
     else
       UNEXPECTEDCASE(

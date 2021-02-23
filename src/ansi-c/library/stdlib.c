@@ -353,9 +353,15 @@ inline long strtol(const char *nptr, char **endptr, int base)
       break;
 
     in_number=1;
-    long res_before=res;
-    res=res*base+ch-sub;
-    if(res<res_before)
+    _Bool overflow = __CPROVER_overflow_mult(res, (long)base);
+#pragma CPROVER check push
+#pragma CPROVER check disable "signed-overflow"
+    // This is now safe; still do it within the scope of the pragma to avoid an
+    // unnecessary assertion to be generated.
+    if(!overflow)
+      res *= base;
+#pragma CPROVER check pop
+    if(overflow || __CPROVER_overflow_plus(res, (long)(ch - sub)))
     {
       errno=ERANGE;
       if(sign=='-')
@@ -363,6 +369,7 @@ inline long strtol(const char *nptr, char **endptr, int base)
       else
         return LONG_MAX;
     }
+    res += ch - sub;
   }
 
   if(endptr!=0)
@@ -477,8 +484,10 @@ inline void *realloc(void *ptr, __CPROVER_size_t malloc_size)
   void *res;
   res=malloc(malloc_size);
   if(res != (void *)0)
+  {
     __CPROVER_array_copy(res, ptr);
-  free(ptr);
+    free(ptr);
+  }
 
   return res;
 }
@@ -525,20 +534,13 @@ __CPROVER_HIDE:;
   // As _mid_memalign simplifies for alignment <= MALLOC_ALIGNMENT
   // to a malloc call, it should be sound, if we do it too.
 
-  // The original posix_memalign check on the pointer is:
-
-  // void *tmp = malloc(size);
-  // if(tmp != NULL){
-  //   *ptr = tmp;
-  //   return 0;
-  // }
-  // return ENOMEM;
-
-  // As _CPROVER_allocate used in malloc never returns null,
-  // this check is not applicable and can be simplified:
-
-  *ptr = malloc(size);
-  return 0;
+  void *tmp = malloc(size);
+  if(tmp != (void *)0)
+  {
+    *ptr = tmp;
+    return 0;
+  }
+  return ENOMEM;
 }
 
 /* FUNCTION: random */

@@ -29,6 +29,7 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <util/arith_tools.h>
 #include <util/c_types.h>
 #include <util/expr_initializer.h>
+#include <util/floatbv_expr.h>
 #include <util/ieee_float.h>
 #include <util/invariant.h>
 #include <util/namespace.h>
@@ -134,7 +135,7 @@ exprt::operandst java_bytecode_convert_methodt::pop(std::size_t n)
 {
   if(stack.size()<n)
   {
-    error() << "malformed bytecode (pop too high)" << eom;
+    log.error() << "malformed bytecode (pop too high)" << messaget::eom;
     throw 0;
   }
 
@@ -575,8 +576,8 @@ void java_bytecode_convert_methodt::convert(
   // the formal parameters
   slots_for_parameters = java_method_parameter_slots(method_type);
 
-  debug() << "Generating codet: class " << class_symbol.name << ", method "
-          << m.name << eom;
+  log.debug() << "Generating codet: class " << class_symbol.name << ", method "
+              << m.name << messaget::eom;
 
   // Add parameter symbols to the symbol table
   create_parameter_symbols(parameters, variables, symbol_table);
@@ -870,11 +871,11 @@ code_blockt &java_bytecode_convert_methodt::get_or_create_block_for_pcrange(
     {
       if(p<(*findstart) || p>=findlim_block_start_address)
       {
-        debug() << "Generating codet:  "
-                << "warning: refusing to create lexical block spanning "
-                << (*findstart) << "-" << findlim_block_start_address
-                << " due to incoming edge " << p << " -> "
-                << checkit->first << eom;
+        log.debug() << "Generating codet:  "
+                    << "warning: refusing to create lexical block spanning "
+                    << (*findstart) << "-" << findlim_block_start_address
+                    << " due to incoming edge " << p << " -> " << checkit->first
+                    << messaget::eom;
         return this_block;
       }
     }
@@ -893,10 +894,10 @@ code_blockt &java_bytecode_convert_methodt::get_or_create_block_for_pcrange(
   code_blockt &newblock=to_code_block(newlabel.code());
   auto nblocks=std::distance(findstart, findlim);
   assert(nblocks>=2);
-  debug() << "Generating codet:  combining "
-          << std::distance(findstart, findlim)
-          << " blocks for addresses " << (*findstart) << "-"
-          << findlim_block_start_address << eom;
+  log.debug() << "Generating codet:  combining "
+              << std::distance(findstart, findlim) << " blocks for addresses "
+              << (*findstart) << "-" << findlim_block_start_address
+              << messaget::eom;
 
   // Make a new block containing every child of interest:
   auto &this_block_children = this_block.statements();
@@ -1525,7 +1526,7 @@ java_bytecode_convert_methodt::convert_instructions(const methodt &method)
     else if(bytecode == patternt("?shl"))
     {
       PRECONDITION(op.size() == 2 && results.size() == 1);
-      results[0]=shl_exprt(op[0], op[1]);
+      results = convert_shl(statement, op, results);
     }
     else if(bytecode == patternt("?shr"))
     {
@@ -1668,6 +1669,49 @@ java_bytecode_convert_methodt::convert_instructions(const methodt &method)
         symbol_table.lookup_ref(field_id).symbol_expr());
 
       c = convert_putstatic(i_it->source_location, arg0, op, symbol_expr);
+    }
+    else if(
+      bytecode == BC_f2i || bytecode == BC_f2l || bytecode == BC_d2i ||
+      bytecode == BC_d2l)
+    {
+      PRECONDITION(op.size() == 1 && results.size() == 1);
+      typet src_type = java_type_from_char(statement[0]);
+      typet dest_type = java_type_from_char(statement[2]);
+
+      // See JLS 5.1.3. Narrowing Primitive Conversion
+      // +-NaN is converted to 0
+      // +-Inf resp. values beyond the int/long range
+      //   are mapped to max/min of int/long.
+      // Other values are rounded towards zero
+
+      // for int: 2147483647, for long: 9223372036854775807L
+      exprt largest_as_dest =
+        to_integer_bitvector_type(dest_type).largest_expr();
+
+      // 2147483647 is not exactly representable in float;
+      // it will be rounded up to 2147483648, which is fine.
+      // 9223372036854775807L is not exactly representable
+      // neither in float nor in double; it is rounded up to
+      // 9223372036854775808.0, which is fine.
+      exprt largest_as_src =
+        from_integer(to_integer_bitvector_type(dest_type).largest(), src_type);
+
+      // for int: -2147483648, for long: -9223372036854775808L
+      exprt smallest_as_dest =
+        to_integer_bitvector_type(dest_type).smallest_expr();
+
+      // -2147483648 and -9223372036854775808L are exactly
+      // representable in float and double.
+      exprt smallest_as_src =
+        from_integer(to_integer_bitvector_type(dest_type).smallest(), src_type);
+
+      results[0] = if_exprt(
+        binary_relation_exprt(op[0], ID_le, smallest_as_src),
+        smallest_as_dest,
+        if_exprt(
+          binary_relation_exprt(op[0], ID_ge, largest_as_src),
+          largest_as_dest,
+          typecast_exprt::conditional_cast(op[0], dest_type)));
     }
     else if(bytecode == patternt("?2?")) // i2c etc.
     {
@@ -2312,7 +2356,7 @@ void java_bytecode_convert_methodt::convert_invoke(
       method_type,
       class_method_descriptor.class_id(),
       symbol_table,
-      get_message_handler());
+      log.get_message_handler());
   }
 
   exprt function;
@@ -2749,6 +2793,23 @@ exprt::operandst &java_bytecode_convert_methodt::convert_cmp(
   return results;
 }
 
+exprt::operandst &java_bytecode_convert_methodt::convert_shl(
+  const irep_idt &statement,
+  const exprt::operandst &op,
+  exprt::operandst &results) const
+{
+  const typet type = java_type_from_char(statement[0]);
+
+  const std::size_t width = get_bytecode_type_width(type);
+
+  // According to JLS 15.19 Shift Operators
+  // a mask 0b11111 is applied for int and 0b111111 for long.
+  exprt mask = from_integer(width - 1, op[1].type());
+
+  results[0] = shl_exprt(op[0], bitand_exprt(op[1], mask));
+  return results;
+}
+
 exprt::operandst &java_bytecode_convert_methodt::convert_ushr(
   const irep_idt &statement,
   const exprt::operandst &op,
@@ -3058,8 +3119,8 @@ optionalt<exprt> java_bytecode_convert_methodt::convert_invoke_dynamic(
     const auto value = zero_initializer(return_type, location, ns);
     if(!value.has_value())
     {
-      error().source_location = location;
-      error() << "failed to zero-initialize return type" << eom;
+      log.error().source_location = location;
+      log.error() << "failed to zero-initialize return type" << messaget::eom;
       throw 0;
     }
     return value;

@@ -60,7 +60,7 @@ protected:
 
   typedef std::stack<local_cfgt::node_nrt> work_queuet;
 
-  mutable numbering<exprt> objects;
+  mutable numberingt<exprt, irep_hash> objects;
 
   typedef unsigned_union_find alias_sett;
 
@@ -103,9 +103,11 @@ public:
   {
     goto_functions=&_goto_functions;
 
-    forall_goto_functions(f_it, _goto_functions)
-      forall_goto_program_instructions(i_it, f_it->second.body)
-        target_map[i_it]=f_it->first;
+    for(const auto &gf_entry : _goto_functions.function_map)
+    {
+      forall_goto_program_instructions(i_it, gf_entry.second.body)
+        target_map[i_it] = gf_entry.first;
+    }
   }
 
   local_may_aliast &operator()(const irep_idt &fkt)

@@ -8,8 +8,6 @@ Author: Daniel Kroening, kroening@kroening.com
 
 #include "bv_utils.h"
 
-#include <cassert>
-
 #include <util/arith_tools.h>
 
 bvt bv_utilst::build_constant(const mp_integer &n, std::size_t width)
@@ -77,7 +75,7 @@ bvt bv_utilst::extract_lsb(const bvt &a, std::size_t n)
   return result;
 }
 
-bvt bv_utilst::concatenate(const bvt &a, const bvt &b) const
+bvt bv_utilst::concatenate(const bvt &a, const bvt &b)
 {
   bvt result;
 
@@ -562,10 +560,10 @@ void bv_utilst::incrementer(
 {
   carry_out=carry_in;
 
-  Forall_literals(it, bv)
+  for(auto &literal : bv)
   {
-    literalt new_carry=prop.land(carry_out, *it);
-    *it=prop.lxor(*it, carry_out);
+    literalt new_carry = prop.land(carry_out, literal);
+    literal = prop.lxor(literal, carry_out);
     carry_out=new_carry;
   }
 }
@@ -581,8 +579,8 @@ bvt bv_utilst::incrementer(const bvt &bv, literalt carry_in)
 bvt bv_utilst::inverted(const bvt &bv)
 {
   bvt result=bv;
-  Forall_literals(it, result)
-    *it=!*it;
+  for(auto &literal : result)
+    literal = !literal;
   return result;
 }
 
@@ -1169,7 +1167,8 @@ literalt bv_utilst::lt_or_le(
     size_t i;
 
     compareBelow.resize(bv0.size());
-    Forall_literals(it, compareBelow) { (*it) = prop.new_variable(); }
+    for(auto &literal : compareBelow)
+      literal = prop.new_variable();
     result = prop.new_variable();
 
     if(rep==SIGNED)
@@ -1311,9 +1310,11 @@ literalt bv_utilst::rel(
 
 bool bv_utilst::is_constant(const bvt &bv)
 {
-  forall_literals(it, bv)
-    if(!it->is_constant())
+  for(const auto &literal : bv)
+  {
+    if(!literal.is_constant())
       return false;
+  }
 
   return true;
 }

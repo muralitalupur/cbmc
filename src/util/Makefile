@@ -3,6 +3,7 @@ SRC = allocate_objects.cpp \
       array_element_from_pointer.cpp \
       array_name.cpp \
       base_type.cpp \
+      bitvector_expr.cpp \
       bv_arithmetic.cpp \
       byte_operators.cpp \
       c_types.cpp \
@@ -46,6 +47,7 @@ SRC = allocate_objects.cpp \
       mathematical_expr.cpp \
       mathematical_types.cpp \
       memory_info.cpp \
+      memory_units.cpp \
       merge_irep.cpp \
       message.cpp \
       mp_arith.cpp \
@@ -55,6 +57,7 @@ SRC = allocate_objects.cpp \
       options.cpp \
       parse_options.cpp \
       parser.cpp \
+      pointer_expr.cpp \
       pointer_offset_size.cpp \
       pointer_offset_sum.cpp \
       pointer_predicates.cpp \

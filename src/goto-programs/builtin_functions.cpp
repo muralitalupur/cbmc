@@ -11,14 +11,14 @@ Author: Daniel Kroening, kroening@kroening.com
 
 #include "goto_convert_class.h"
 
-#include <cassert>
-
 #include <util/arith_tools.h>
 #include <util/c_types.h>
 #include <util/cprover_prefix.h>
 #include <util/expr_initializer.h>
 #include <util/expr_util.h>
 #include <util/mathematical_expr.h>
+#include <util/mathematical_types.h>
+#include <util/pointer_expr.h>
 #include <util/pointer_offset_size.h>
 #include <util/prefix.h>
 #include <util/rational.h>
@@ -611,6 +611,32 @@ exprt make_va_list(const exprt &expr)
   return result;
 }
 
+void goto_convertt::do_enum_is_in_range(
+  const exprt &lhs,
+  const symbol_exprt &function,
+  const exprt::operandst &arguments,
+  goto_programt &dest)
+{
+  PRECONDITION(arguments.size() == 1);
+  const auto enum_expr = arguments.front();
+  const auto enum_type =
+    type_try_dynamic_cast<c_enum_tag_typet>(enum_expr.type());
+  PRECONDITION(enum_type);
+  const c_enum_typet &c_enum_type = ns.follow_tag(*enum_type);
+  const c_enum_typet::memberst enum_values = c_enum_type.members();
+
+  exprt::operandst disjuncts;
+  for(const auto &enum_value : enum_values)
+  {
+    constant_exprt val{enum_value.get_value(), *enum_type};
+    disjuncts.push_back(equal_exprt(enum_expr, std::move(val)));
+  }
+
+  code_assignt assignment(lhs, disjunction(disjuncts));
+  assignment.add_source_location() = function.source_location();
+  copy(assignment, ASSIGN, dest);
+}
+
 /// add function calls to function queue for later processing
 void goto_convertt::do_function_call_symbol(
   const exprt &lhs,
@@ -734,6 +760,10 @@ void goto_convertt::do_function_call_symbol(
       error() << identifier << " expected not to have LHS" << eom;
       throw 0;
     }
+  }
+  else if(identifier == CPROVER_PREFIX "enum_is_in_range")
+  {
+    do_enum_is_in_range(lhs, function, arguments, dest);
   }
   else if(
     identifier == CPROVER_PREFIX "assert" ||
@@ -893,7 +923,23 @@ void goto_convertt::do_function_call_symbol(
     if(lhs.is_nil())
       return;
 
-    const function_application_exprt rhs(function, arguments, lhs.type());
+    if(function.type().get_bool(ID_C_incomplete))
+    {
+      error().source_location = function.find_source_location();
+      error() << "'" << identifier << "' is not declared, "
+              << "missing type information required to construct call to "
+              << "uninterpreted function" << eom;
+      throw 0;
+    }
+
+    const code_typet &function_call_type = to_code_type(function.type());
+    mathematical_function_typet::domaint domain;
+    for(const auto &parameter : function_call_type.parameters())
+      domain.push_back(parameter.type());
+    mathematical_function_typet function_type{domain,
+                                              function_call_type.return_type()};
+    const function_application_exprt rhs(
+      symbol_exprt{function.get_identifier(), function_type}, arguments);
 
     code_assignt assignment(lhs, rhs);
     assignment.add_source_location()=function.source_location();
@@ -1043,8 +1089,8 @@ void goto_convertt::do_function_call_symbol(
 
     codet fence(ID_fence);
 
-    forall_expr(it, arguments)
-      fence.set(get_string_constant(*it), true);
+    for(const auto &argument : arguments)
+      fence.set(get_string_constant(argument), true);
 
     dest.add(goto_programt::make_other(fence, function.source_location()));
   }

@@ -12,6 +12,7 @@ Author: Daniel Kroening, kroening@cs.cmu.edu
 #include "cpp_typecheck.h"
 
 #include <util/arith_tools.h>
+#include <util/pointer_expr.h>
 #include <util/source_location.h>
 
 #include "cpp_convert_type.h"
@@ -447,6 +448,13 @@ void cpp_typecheckt::typecheck_decl(codet &code)
 
     if(is_typedef)
       continue;
+
+    if(!symbol.is_type && !symbol.is_extern && symbol.type.id() == ID_empty)
+    {
+      error().source_location = symbol.location;
+      error() << "void-typed symbol not permitted" << eom;
+      throw 0;
+    }
 
     code_declt decl_statement(cpp_symbol_expr(symbol));
     decl_statement.add_source_location()=symbol.location;

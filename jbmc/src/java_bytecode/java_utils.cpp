@@ -23,13 +23,6 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <set>
 #include <unordered_set>
 
-bool java_is_array_type(const typet &type)
-{
-  if(type.id() != ID_struct)
-    return false;
-  return is_java_array_tag(to_struct_type(type).get_tag());
-}
-
 bool is_java_string_type(const struct_typet &struct_type)
 {
   return java_string_library_preprocesst::implements_java_char_sequence(
@@ -408,7 +401,7 @@ exprt make_function_application(
     symbol_table);
 
   // Function application
-  return function_application_exprt(symbol.symbol_expr(), arguments, range);
+  return function_application_exprt{symbol.symbol_expr(), arguments};
 }
 
 /// Strip java:: prefix from given identifier
@@ -536,8 +529,7 @@ bool is_non_null_library_global(const irep_idt &symbolid)
 
 /// Methods belonging to the class org.cprover.CProver that should be ignored
 /// (not converted), leaving the driver program to stub them if it wishes.
-const std::unordered_set<std::string> cprover_methods_to_ignore
-{
+const std::unordered_set<std::string> cprover_methods_to_ignore{
   "nondetBoolean",
   "nondetByte",
   "nondetChar",
@@ -553,8 +545,8 @@ const std::unordered_set<std::string> cprover_methods_to_ignore
   "atomicEnd",
   "startThread",
   "endThread",
-  "getCurrentThreadID"
-};
+  "getCurrentThreadId",
+  "getMonitorCount"};
 
 /// \param type: type of new symbol
 /// \param basename_prefix: new symbol will be named

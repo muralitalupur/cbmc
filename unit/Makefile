@@ -14,6 +14,17 @@ SRC += analyses/ai/ai.cpp \
        analyses/does_remove_const/does_expr_lose_const.cpp \
        analyses/does_remove_const/does_type_preserve_const_correctness.cpp \
        analyses/does_remove_const/is_type_at_least_as_const_as.cpp \
+       analyses/variable-sensitivity/abstract_object/merge.cpp \
+       analyses/variable-sensitivity/abstract_object/index_range.cpp \
+       analyses/variable-sensitivity/constant_abstract_value/merge.cpp \
+       analyses/variable-sensitivity/full_array_abstract_object/merge.cpp \
+       analyses/variable-sensitivity/eval.cpp \
+       analyses/variable-sensitivity/eval-member-access.cpp \
+       analyses/variable-sensitivity/interval_abstract_value/meet.cpp \
+       analyses/variable-sensitivity/full_struct_abstract_object/merge.cpp \
+       analyses/variable-sensitivity/last_written_location.cpp \
+       analyses/variable-sensitivity/value_set/abstract_value.cpp \
+       analyses/variable-sensitivity/value_set/pointer_abstract_object.cpp \
        ansi-c/max_malloc_size.cpp \
        ansi-c/type2name.cpp \
        big-int/big-int.cpp \
@@ -23,7 +34,6 @@ SRC += analyses/ai/ai.cpp \
        goto-checker/report_util/is_property_less_than.cpp \
        goto-instrument/cover_instrument.cpp \
        goto-instrument/cover/cover_only.cpp \
-       goto-programs/goto_model_function_type_consistency.cpp \
        goto-programs/goto_program_assume.cpp \
        goto-programs/goto_program_dead.cpp \
        goto-programs/goto_program_declaration.cpp \
@@ -59,6 +69,7 @@ SRC += analyses/ai/ai.cpp \
        solvers/lowering/byte_operators.cpp \
        solvers/prop/bdd_expr.cpp \
        solvers/sat/external_sat.cpp \
+       solvers/sat/satcheck_cadical.cpp \
        solvers/sat/satcheck_minisat2.cpp \
        solvers/strings/array_pool/array_pool.cpp \
        solvers/strings/string_constraint_generator_valueof/calculate_max_string_length.cpp \
@@ -79,6 +90,7 @@ SRC += analyses/ai/ai.cpp \
        util/expr.cpp \
        util/expr_iterator.cpp \
        util/file_util.cpp \
+       util/format.cpp \
        util/format_number_range.cpp \
        util/get_base_name.cpp \
        util/graph.cpp \
@@ -109,6 +121,7 @@ SRC += analyses/ai/ai.cpp \
        util/prefix_filter.cpp \
        util/range.cpp \
        util/replace_symbol.cpp \
+       util/run.cpp \
        util/sharing_map.cpp \
        util/sharing_node.cpp \
        util/simplify_expr.cpp \
@@ -119,6 +132,7 @@ SRC += analyses/ai/ai.cpp \
        util/string2int.cpp \
        util/structured_data.cpp \
        util/string_utils/capitalize.cpp \
+       util/string_utils/escape_non_alnum.cpp \
        util/string_utils/join_string.cpp \
        util/string_utils/split_string.cpp \
        util/string_utils/strip_string.cpp \
@@ -212,6 +226,12 @@ CATCH_TEST = unit_tests$(EXEEXT)
 EXCLUDED_TESTS=expr_undefined_casts.cpp
 ifneq ($(WITH_MEMORY_ANALYZER),1)
 EXCLUDED_TESTS += gdb_api.cpp
+endif
+ifeq ($(MINISAT2),)
+EXCLUDED_TESTS += satcheck_minisat2.cpp
+endif
+ifeq ($(CADICAL),)
+EXCLUDED_TESTS += satcheck_cadical.cpp
 endif
 
 N_CATCH_TESTS = $(shell \

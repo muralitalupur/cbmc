@@ -55,7 +55,7 @@ void irep_hash_container_baset::pack(
   {
     // we pack: the irep id, the sub size, the subs, the named-sub size, and
     // each of the named subs with their ids
-#ifdef NAMED_SUB_IS_FORWARD_LIST
+#if NAMED_SUB_IS_FORWARD_LIST
     const std::size_t named_sub_size =
       std::distance(named_sub.begin(), named_sub.end());
 #else
@@ -66,8 +66,8 @@ void irep_hash_container_baset::pack(
     packed.push_back(irep_id_hash()(irep.id()));
 
     packed.push_back(sub.size());
-    forall_irep(it, sub)
-      packed.push_back(number(*it));
+    for(const auto &sub_irep : sub)
+      packed.push_back(number(sub_irep));
 
     packed.push_back(named_sub_size);
     for(const auto &sub_irep : named_sub)
@@ -88,8 +88,8 @@ void irep_hash_container_baset::pack(
     packed.push_back(irep_id_hash()(irep.id()));
 
     packed.push_back(sub.size());
-    forall_irep(it, sub)
-      packed.push_back(number(*it));
+    for(const auto &sub_irep : sub)
+      packed.push_back(number(sub_irep));
 
     packed.push_back(non_comment_count);
     for(const auto &sub_irep : named_sub)

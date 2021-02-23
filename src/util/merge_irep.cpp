@@ -17,15 +17,17 @@ std::size_t to_be_merged_irept::hash() const
   const irept::subt &sub=get_sub();
   const irept::named_subt &named_sub=get_named_sub();
 
-  forall_irep(it, sub)
-    result=hash_combine(result, static_cast<const merged_irept &>(*it).hash());
-
-  forall_named_irep(it, named_sub)
+  for(const auto &irep : sub)
   {
-    result=hash_combine(result, hash_string(it->first));
-    result=
-      hash_combine(
-        result, static_cast<const merged_irept &>(it->second).hash());
+    result =
+      hash_combine(result, static_cast<const merged_irept &>(irep).hash());
+  }
+
+  for(const auto &irep_entry : named_sub)
+  {
+    result = hash_combine(result, hash_string(irep_entry.first));
+    result = hash_combine(
+      result, static_cast<const merged_irept &>(irep_entry.second).hash());
   }
 
   const std::size_t named_sub_size = named_sub.size();
@@ -46,7 +48,7 @@ bool to_be_merged_irept::operator == (const to_be_merged_irept &other) const
 
   if(sub.size()!=o_sub.size())
     return false;
-#ifdef NAMED_SUB_IS_FORWARD_LIST
+#if NAMED_SUB_IS_FORWARD_LIST
   if(
     std::distance(named_sub.begin(), named_sub.end()) !=
     std::distance(o_named_sub.begin(), o_named_sub.end()))
@@ -99,23 +101,24 @@ const merged_irept &merged_irepst::merged(const irept &irep)
   irept::subt &dest_sub=new_irep.get_sub();
   dest_sub.reserve(src_sub.size());
 
-  forall_irep(it, src_sub)
-    dest_sub.push_back(merged(*it)); // recursive call
+  for(const auto &sub_irep : src_sub)
+    dest_sub.push_back(merged(sub_irep)); // recursive call
 
   const irept::named_subt &src_named_sub=irep.get_named_sub();
   irept::named_subt &dest_named_sub=new_irep.get_named_sub();
 
-#ifdef NAMED_SUB_IS_FORWARD_LIST
+#if NAMED_SUB_IS_FORWARD_LIST
   irept::named_subt::iterator before = dest_named_sub.before_begin();
 #endif
-  forall_named_irep(it, src_named_sub)
+  for(const auto &irep_entry : src_named_sub)
   {
-#ifdef NAMED_SUB_IS_FORWARD_LIST
+#if NAMED_SUB_IS_FORWARD_LIST
     dest_named_sub.emplace_after(
-      before, it->first, merged(it->second)); // recursive call
+      before, irep_entry.first, merged(irep_entry.second)); // recursive call
     ++before;
 #else
-    dest_named_sub[it->first]=merged(it->second); // recursive call
+    dest_named_sub[irep_entry.first] =
+      merged(irep_entry.second); // recursive call
 #endif
   }
 
@@ -148,10 +151,10 @@ const irept &merge_irept::merged(const irept &irep)
   irept::subt *dest_sub_ptr = nullptr;
 
   std::size_t index = 0;
-  forall_irep(it, src_sub)
+  for(const auto &sub_irep : src_sub)
   {
-    const irept &op = merged(*it); // recursive call
-    if(&op.read() != &(it->read()))
+    const irept &op = merged(sub_irep); // recursive call
+    if(&op.read() != &(sub_irep.read()))
     {
       if(!dest_sub_ptr)
         dest_sub_ptr = &(const_cast<irept &>(*entry.first)).get_sub();
@@ -164,12 +167,12 @@ const irept &merge_irept::merged(const irept &irep)
   irept::named_subt *dest_named_sub_ptr = nullptr;
 
   std::ptrdiff_t advance_by = 0;
-  forall_named_irep(it, src_named_sub)
+  for(const auto &irep_entry : src_named_sub)
   {
-    if(!irept::is_comment(it->first))
+    if(!irept::is_comment(irep_entry.first))
     {
-      const irept &op = merged(it->second); // recursive call
-      if(&op.read() != &(it->second.read()))
+      const irept &op = merged(irep_entry.second); // recursive call
+      if(&op.read() != &(irep_entry.second.read()))
       {
         if(!dest_named_sub_ptr)
           dest_named_sub_ptr =
@@ -203,23 +206,24 @@ const irept &merge_full_irept::merged(const irept &irep)
   irept::subt &dest_sub=new_irep.get_sub();
   dest_sub.reserve(src_sub.size());
 
-  forall_irep(it, src_sub)
-    dest_sub.push_back(merged(*it)); // recursive call
+  for(const auto &sub_irep : src_sub)
+    dest_sub.push_back(merged(sub_irep)); // recursive call
 
   const irept::named_subt &src_named_sub=irep.get_named_sub();
   irept::named_subt &dest_named_sub=new_irep.get_named_sub();
 
-#ifdef NAMED_SUB_IS_FORWARD_LIST
+#if NAMED_SUB_IS_FORWARD_LIST
   irept::named_subt::iterator before = dest_named_sub.before_begin();
 #endif
-  forall_named_irep(it, src_named_sub)
+  for(const auto &irep_entry : src_named_sub)
   {
-#ifdef NAMED_SUB_IS_FORWARD_LIST
+#if NAMED_SUB_IS_FORWARD_LIST
     dest_named_sub.emplace_after(
-      before, it->first, merged(it->second)); // recursive call
+      before, irep_entry.first, merged(irep_entry.second)); // recursive call
     ++before;
 #else
-    dest_named_sub[it->first]=merged(it->second); // recursive call
+    dest_named_sub[irep_entry.first] =
+      merged(irep_entry.second); // recursive call
 #endif
   }
 

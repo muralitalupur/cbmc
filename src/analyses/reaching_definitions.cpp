@@ -90,12 +90,15 @@ void rd_range_domaint::populate_cache(const irep_idt &identifier) const
 
 void rd_range_domaint::transform(
   const irep_idt &function_from,
-  locationt from,
+  trace_ptrt trace_from,
   const irep_idt &function_to,
-  locationt to,
+  trace_ptrt trace_to,
   ai_baset &ai,
   const namespacet &ns)
 {
+  locationt from{trace_from->current_location()};
+  locationt to{trace_to->current_location()};
+
   reaching_definitions_analysist *rd=
     dynamic_cast<reaching_definitions_analysist*>(&ai);
   INVARIANT_STRUCTURED(
@@ -136,16 +139,17 @@ void rd_range_domaint::transform(
       goto_rw(to, rw_set);
       const bool is_must_alias=rw_set.get_w_set().size()==1;
 
-      forall_rw_range_set_w_objects(it, rw_set)
+      for(const auto &written_object_entry : rw_set.get_w_set())
       {
-        const irep_idt &identifier=it->first;
+        const irep_idt &identifier = written_object_entry.first;
         // ignore symex::invalid_object
         const symbolt *symbol_ptr;
         if(ns.lookup(identifier, symbol_ptr))
           continue;
         assert(symbol_ptr!=0);
 
-        const range_domaint &ranges=rw_set.get_ranges(it);
+        const range_domaint &ranges =
+          rw_set.get_ranges(written_object_entry.second);
 
         if(is_must_alias &&
            (!rd->get_is_threaded()(from) ||
@@ -342,9 +346,9 @@ void rd_range_domaint::transform_assign(
   goto_rw(function_to, to, rw_set);
   const bool is_must_alias=rw_set.get_w_set().size()==1;
 
-  forall_rw_range_set_w_objects(it, rw_set)
+  for(const auto &written_object_entry : rw_set.get_w_set())
   {
-    const irep_idt &identifier=it->first;
+    const irep_idt &identifier = written_object_entry.first;
     // ignore symex::invalid_object
     const symbolt *symbol_ptr;
     if(ns.lookup(identifier, symbol_ptr))
@@ -354,7 +358,8 @@ void rd_range_domaint::transform_assign(
       nullptr_exceptiont,
       "Symbol is in symbol table");
 
-    const range_domaint &ranges=rw_set.get_ranges(it);
+    const range_domaint &ranges =
+      rw_set.get_ranges(written_object_entry.second);
 
     if(is_must_alias &&
        (!rd.get_is_threaded()(from) ||

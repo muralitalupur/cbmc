@@ -71,24 +71,44 @@ const std::string satcheck_ipasirt::solver_text()
 
 void satcheck_ipasirt::lcnf(const bvt &bv)
 {
-  forall_literals(it, bv)
+  for(const auto &literal : bv)
   {
-    if(it->is_true())
+    if(literal.is_true())
       return;
-    else if(!it->is_false())
-      INVARIANT(it->var_no()<(unsigned)no_variables(),
-             "reject out of bound variables");
+    else if(!literal.is_false())
+    {
+      INVARIANT(
+        literal.var_no() < (unsigned)no_variables(),
+        "reject out of bound variables");
+    }
   }
 
-  forall_literals(it, bv)
+  for(const auto &literal : bv)
   {
-    if(!it->is_false())
+    if(!literal.is_false())
     {
       // add literal with correct sign
-      ipasir_add(solver, it->dimacs());
+      ipasir_add(solver, literal.dimacs());
     }
   }
   ipasir_add(solver, 0); // terminate clause
+
+  with_solver_hardness([this, &bv](solver_hardnesst &hardness) {
+    // To map clauses to lines of program code, track clause indices in the
+    // dimacs cnf output. Dimacs output is generated after processing
+    // clauses to remove duplicates and clauses that are trivially true.
+    // Here, a clause is checked to see if it can be thus eliminated. If
+    // not, add the clause index to list of clauses in
+    // solver_hardnesst::register_clause().
+    static size_t cnf_clause_index = 0;
+    bvt cnf;
+    bool clause_removed = process_clause(bv, cnf);
+
+    if(!clause_removed)
+      cnf_clause_index++;
+
+    hardness.register_clause(bv, cnf, cnf_clause_index, !clause_removed);
+  });
 
   clause_counter++;
 }
@@ -100,51 +120,42 @@ propt::resultt satcheck_ipasirt::do_prop_solve()
   log.statistics() << (no_variables() - 1) << " variables, " << clause_counter
                    << " clauses" << messaget::eom;
 
-  // use the internal representation, as ipasir does not support reporting the
-  // status
-  if(status==statust::UNSAT)
+  // if assumptions contains false, we need this to be UNSAT
+  bvt::const_iterator it =
+    std::find_if(assumptions.begin(), assumptions.end(), is_false);
+  const bool has_false = it != assumptions.end();
+
+  if(has_false)
   {
-    log.status() << "SAT checker inconsistent: instance is UNSATISFIABLE"
+    log.status() << "got FALSE as assumption: instance is UNSATISFIABLE"
                  << messaget::eom;
   }
   else
   {
-    // if assumptions contains false, we need this to be UNSAT
-    bvt::const_iterator it = std::find_if(assumptions.begin(),
-      assumptions.end(), is_false);
-    const bool has_false = it != assumptions.end();
-
-    if(has_false)
+    for(const auto &literal : assumptions)
     {
-      log.status() << "got FALSE as assumption: instance is UNSATISFIABLE"
-                   << messaget::eom;
+      if(!literal.is_false())
+        ipasir_assume(solver, literal.dimacs());
+    }
+
+    // solve the formula, and handle the return code (10=SAT, 20=UNSAT)
+    int solver_state = ipasir_solve(solver);
+    if(10 == solver_state)
+    {
+      log.status() << "SAT checker: instance is SATISFIABLE" << messaget::eom;
+      status = statust::SAT;
+      return resultt::P_SATISFIABLE;
+    }
+    else if(20 == solver_state)
+    {
+      log.status() << "SAT checker: instance is UNSATISFIABLE" << messaget::eom;
     }
     else
     {
-      forall_literals(it, assumptions)
-        if(!it->is_false())
-          ipasir_assume(solver, it->dimacs());
-
-      // solve the formula, and handle the return code (10=SAT, 20=UNSAT)
-      int solver_state=ipasir_solve(solver);
-      if(10==solver_state)
-      {
-        log.status() << "SAT checker: instance is SATISFIABLE" << messaget::eom;
-        status=statust::SAT;
-        return resultt::P_SATISFIABLE;
-      }
-      else if(20==solver_state)
-      {
-        log.status() << "SAT checker: instance is UNSATISFIABLE"
-                     << messaget::eom;
-      }
-      else
-      {
-        log.status() << "SAT checker: solving returned without solution"
-                     << messaget::eom;
-        throw analysis_exceptiont(
-          "solving inside IPASIR SAT solver has been interrupted");
-      }
+      log.status() << "SAT checker: solving returned without solution"
+                   << messaget::eom;
+      throw analysis_exceptiont(
+        "solving inside IPASIR SAT solver has been interrupted");
     }
   }
 
@@ -158,8 +169,8 @@ void satcheck_ipasirt::set_assignment(literalt a, bool value)
   INVARIANT(false, "method not supported");
 }
 
-satcheck_ipasirt::satcheck_ipasirt()
-: solver(nullptr)
+satcheck_ipasirt::satcheck_ipasirt(message_handlert &message_handler)
+  : cnf_solvert(message_handler), solver(nullptr)
 {
   INVARIANT(!solver, "there cannot be a solver already");
   solver=ipasir_init();

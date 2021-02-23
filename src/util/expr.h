@@ -9,17 +9,18 @@ Author: Daniel Kroening, kroening@kroening.com
 #ifndef CPROVER_UTIL_EXPR_H
 #define CPROVER_UTIL_EXPR_H
 
-#include "deprecate.h"
+#include "as_const.h"
 #include "type.h"
 #include "validate_expressions.h"
 #include "validate_types.h"
 #include "validation_mode.h"
 
-#define forall_operands(it, expr) \
-  if((expr).has_operands()) /* NOLINT(readability/braces) */ \
-    for(exprt::operandst::const_iterator it=(expr).operands().begin(), \
-        it##_end=(expr).operands().end(); \
-        it!=it##_end; ++it)
+#define forall_operands(it, expr)                                              \
+  for(exprt::operandst::const_iterator                                         \
+        it = as_const(expr).operands().begin(),                                \
+        it##_end = as_const(expr).operands().end();                            \
+      it != it##_end;                                                          \
+      ++it)
 
 #define Forall_operands(it, expr) \
   if((expr).has_operands()) /* NOLINT(readability/braces) */ \
@@ -127,24 +128,6 @@ public:
   void reserve_operands(operandst::size_type n)
   { operands().reserve(n) ; }
 
-  DEPRECATED(SINCE(2018, 10, 1, "use add_to_operands(std::move(expr)) instead"))
-  void move_to_operands(exprt &expr);
-
-  DEPRECATED(SINCE(
-    2018,
-    10,
-    1,
-    "use add_to_operands(std::move(e1), std::move(e2)) instead"))
-  void move_to_operands(exprt &e1, exprt &e2);
-
-  DEPRECATED(SINCE(
-    2018,
-    10,
-    1,
-    "use add_to_operands(std::move(e1), std::move(e2), std::move(e3))"
-    "instead"))
-  void move_to_operands(exprt &e1, exprt &e2, exprt &e3);
-
   /// Copy the given argument to the end of `exprt`'s operands.
   /// \param expr: `exprt` to append to the operands
   void copy_to_operands(const exprt &expr)
@@ -238,9 +221,6 @@ public:
     op.push_back(std::move(e2));
     op.push_back(std::move(e3));
   }
-
-  DEPRECATED(SINCE(2019, 5, 28, "use make_boolean_expr(value) instead"))
-  void make_bool(bool value);
 
   bool is_constant() const;
   bool is_true() const;
@@ -379,7 +359,6 @@ protected:
 
   // protect these low-level methods
   using exprt::add;
-  using exprt::make_bool;
   using exprt::op0;
   using exprt::op1;
   using exprt::op2;

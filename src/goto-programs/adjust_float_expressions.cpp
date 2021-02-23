@@ -11,12 +11,13 @@ Author: Daniel Kroening, kroening@kroening.com
 
 #include "adjust_float_expressions.h"
 
+#include <util/arith_tools.h>
 #include <util/cprover_prefix.h>
 #include <util/expr_util.h>
+#include <util/floatbv_expr.h>
+#include <util/ieee_float.h>
 #include <util/std_expr.h>
 #include <util/symbol.h>
-#include <util/ieee_float.h>
-#include <util/arith_tools.h>
 
 #include "goto_model.h"
 
@@ -213,8 +214,8 @@ void adjust_float_expressions(
   goto_functionst &goto_functions,
   const namespacet &ns)
 {
-  Forall_goto_functions(it, goto_functions)
-    adjust_float_expressions(it->second, ns);
+  for(auto &gf_entry : goto_functions.function_map)
+    adjust_float_expressions(gf_entry.second, ns);
 }
 
 void adjust_float_expressions(goto_modelt &goto_model)

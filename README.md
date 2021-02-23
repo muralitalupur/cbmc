@@ -1,4 +1,3 @@
-[![Build Status][travis_img]][travis]
 [![Build Status][codebuild_img]][codebuild]
 [![Build Status][codebuild_windows_img]][codebuild_windows]
 [![Build Status][coverity_img]][coverity]
@@ -21,6 +20,10 @@ and passing the resulting equation to a decision procedure.
 
 For full information see [cprover.org](http://www.cprover.org/cbmc).
 
+For an overview of the various tools that are part of CProver and
+how to use them see [TOOLS_OVERVIEW.md](TOOLS_OVERVIEW.md).
+
+
 Versions
 ========
 
@@ -42,6 +45,38 @@ Note that we depend on the Visual C++ redistributables. You likely
 already have these, if not please download and run vcredist.x64.exe from
 [Microsoft](https://support.microsoft.com/en-gb/help/2977003/the-latest-supported-visual-c-downloads) to install them prior to running
 cbmc.
+
+### Linux
+
+For different linux environments, you have these choices:
+
+1. Install CBMC through the distribution's repositories, with the downside
+   that this might install an older version of cbmc, depending on what the
+   package maintenance policy of the distribution is, or
+2. Install CBMC through the `.deb` package built by each release, available
+   on the [releases](https://github.com/diffblue/cbmc/releases) page. To
+   do that, download the `.deb` package and run `apt install cbmc-x.y.deb`
+   with `root` privileges, with `x.y` being substituted for the version
+   you are attempting to install.
+
+   *NOTE*: Because of libc/libc++ ABI compatibility and package
+   dependency names, if you follow this path make sure you install the
+   package appropriate for the version of operating system you are using.
+3. Compile from source using the instructions [here](COMPILING.md)
+
+### macOS
+
+For macOS there is a [Homebrew](https://brew.sh) package
+[available](https://formulae.brew.sh/formula/cbmc). Once you have installed
+Homebrew, simply run
+
+    brew install cbmc
+
+to install cbmc, or if you already have it installed via homebrew
+
+    brew upgrade cbmc
+
+to get an up-to-date version.
 
 Report bugs
 ===========
@@ -67,8 +102,7 @@ License
 =======
 4-clause BSD license, see `LICENSE` file.
 
-[travis]: https://travis-ci.org/diffblue/cbmc
-[travis_img]: https://travis-ci.org/diffblue/cbmc.svg?branch=master
+
 [codebuild]: https://us-east-1.console.aws.amazon.com/codesuite/codebuild/projects/cbmc/history?region=us-east-1
 [codebuild_img]: https://codebuild.us-east-1.amazonaws.com/badges?uuid=eyJlbmNyeXB0ZWREYXRhIjoiajhxcmNGUEgyV0xZa2ZFaVd3czJmbm1DdEt3QVdJRVdZaGJuMTUwOHFrZUM3eERwS1g4VEQ3Ymw3bmFncldVQXArajlYL1pXbGZNVTdXdndzUHU4Ly9JPSIsIml2UGFyYW1ldGVyU3BlYyI6IkVUUEdWVEt0SUFONlhyNVAiLCJtYXRlcmlhbFNldFNlcmlhbCI6MX0%3D&branch=develop
 [codebuild_windows]: https://us-east-1.console.aws.amazon.com/codesuite/codebuild/projects/cbmc-windows/history?region=us-east-1

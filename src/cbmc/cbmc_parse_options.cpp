@@ -51,6 +51,7 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <goto-programs/adjust_float_expressions.h>
 #include <goto-programs/initialize_goto_model.h>
 #include <goto-programs/instrument_preconditions.h>
+#include <goto-programs/link_goto_model.h>
 #include <goto-programs/link_to_library.h>
 #include <goto-programs/loop_ids.h>
 #include <goto-programs/mm_io.h>
@@ -477,6 +478,11 @@ void cbmc_parse_optionst::get_command_line_options(optionst &options)
   {
     options.set_option(
       "write-solver-stats-to", cmdline.get_value("write-solver-stats-to"));
+  }
+
+  if(cmdline.isset("use-rra"))
+  {
+    options.set_option("use-rra", cmdline.get_value("use-rra"));
   }
 
   if(cmdline.isset("beautify"))
@@ -1137,6 +1143,10 @@ void cbmc_parse_optionst::help()
     HELP_TIMESTAMP
     " --write-solver-stats-to json-file\n"
     "                              collect the solver query complexity\n"
+    // NOLINTNEXTLINE(whitespace/line_length)
+    " --use-rra abstraction-file\n"
+    // NOLINTNEXTLINE(whitespace/line_length)
+    "                              abstract the program as specified in the abstraction-file"
     "\n";
   // clang-format on
 }

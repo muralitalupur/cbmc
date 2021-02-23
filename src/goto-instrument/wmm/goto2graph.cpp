@@ -436,9 +436,9 @@ bool instrumentert::cfg_visitort::contains_shared_array(
     instrumenter.message.debug() << "Writes: "<<rw_set.w_entries.size()
       <<"; Reads:"<<rw_set.r_entries.size() << messaget::eom;
 
-    forall_rw_set_r_entries(r_it, rw_set)
+    for(const auto &r_entry : rw_set.r_entries)
     {
-      const irep_idt var=r_it->second.object;
+      const irep_idt var = r_entry.second.object;
       instrumenter.message.debug() << "Is "<<var<<" an array?"
         << messaget::eom;
       if(id2string(var).find("[]")!=std::string::npos
@@ -446,9 +446,9 @@ bool instrumentert::cfg_visitort::contains_shared_array(
         return true;
     }
 
-    forall_rw_set_w_entries(w_it, rw_set)
+    for(const auto &w_entry : rw_set.w_entries)
     {
-      const irep_idt var=w_it->second.object;
+      const irep_idt var = w_entry.second.object;
       instrumenter.message.debug()<<"Is "<<var<<" an array?"<<messaget::eom;
       if(id2string(var).find("[]")!=std::string::npos
         && !instrumenter.local(var))
@@ -874,13 +874,13 @@ void instrumentert::cfg_visitort::visit_cfg_assign(
     continue; // return;
 #endif
 
-  forall_rw_set_r_entries(r_it, rw_set)
+  for(const auto &r_entry : rw_set.r_entries)
   {
     /* creates Read:
        read is the irep_id of the read in the code;
        new_read_event is the corresponding abstract event;
        new_read_node is the node in the graph */
-    const irep_idt &read=r_it->second.object;
+    const irep_idt &read = r_entry.second.object;
 
     /* skip local variables */
     if(local(read))
@@ -976,13 +976,13 @@ void instrumentert::cfg_visitort::visit_cfg_assign(
   }
 
   /* Write (Wa) */
-  forall_rw_set_w_entries(w_it, rw_set)
+  for(const auto &w_entry : rw_set.w_entries)
   {
     /* creates Write:
        write is the irep_id in the code;
        new_write_event is the corresponding abstract event;
        new_write_node is the node in the graph */
-    const irep_idt &write=w_it->second.object;
+    const irep_idt &write = w_entry.second.object;
 
     instrumenter.message.debug() << "WRITE: " << write << messaget::eom;
 
@@ -1142,30 +1142,34 @@ void instrumentert::cfg_visitort::visit_cfg_assign(
   /* data dependency analysis */
   if(!no_dependencies)
   {
-    forall_rw_set_w_entries(write_it, rw_set)
-      forall_rw_set_r_entries(read_it, rw_set)
+    for(const auto &w_entry : rw_set.w_entries)
+    {
+      for(const auto &r_entry : rw_set.r_entries)
       {
-        const irep_idt &write=write_it->second.object;
-        const irep_idt &read=read_it->second.object;
+        const irep_idt &write = w_entry.second.object;
+        const irep_idt &read = r_entry.second.object;
         instrumenter.message.debug() << "dp: Write:"<<write<<"; Read:"<<read
           << messaget::eom;
         const datat read_p(read, instruction.source_location);
         const datat write_p(write, instruction.source_location);
           data_dp.dp_analysis(read_p, local(read), write_p, local(write));
         }
+    }
     data_dp.dp_merge();
 
-    forall_rw_set_r_entries(read2_it, rw_set)
-      forall_rw_set_r_entries(read_it, rw_set)
+    for(const auto &r_entry : rw_set.r_entries)
+    {
+      for(const auto &r_entry2 : rw_set.r_entries)
       {
-        const irep_idt &read2=read2_it->second.object;
-        const irep_idt &read=read_it->second.object;
+        const irep_idt &read2 = r_entry2.second.object;
+        const irep_idt &read = r_entry.second.object;
         if(read2==read)
           continue;
         const datat read_p(read, instruction.source_location);
         const datat read2_p(read2, instruction.source_location);
         data_dp.dp_analysis(read_p, local(read), read2_p, local(read2));
       }
+    }
     data_dp.dp_merge();
   }
 }
@@ -1265,15 +1269,17 @@ bool instrumentert::is_cfg_spurious(const event_grapht::critical_cyclet &cyc)
     goto_programt *current_po=nullptr;
     bool thread_found=false;
 
-    Forall_goto_functions(f_it, goto_functions)
+    for(auto &gf_entry : goto_functions.function_map)
     {
-      forall_goto_program_instructions(p_it, f_it->second.body)
-        if(p_it->source_location==current_location)
+      for(const auto &instruction : gf_entry.second.body.instructions)
+      {
+        if(instruction.source_location == current_location)
         {
-          current_po=&f_it->second.body;
+          current_po = &gf_entry.second.body;
           thread_found=true;
           break;
         }
+      }
 
       if(thread_found)
         break;
@@ -1341,28 +1347,32 @@ bool instrumentert::is_cfg_spurious(const event_grapht::critical_cyclet &cyc)
 
   /* if a goto points to a label outside from this interleaving, replace it
      by an assert 0 */
-  Forall_goto_program_instructions(int_it, interleaving)
-    if(int_it->is_goto())
+  for(auto &instruction : interleaving.instructions)
+  {
+    if(instruction.is_goto())
     {
-      for(const auto &t : int_it->targets)
+      for(const auto &t : instruction.targets)
       {
         bool target_in_cycle=false;
 
         forall_goto_program_instructions(targ, interleaving)
+        {
           if(targ==t)
           {
             target_in_cycle=true;
             break;
           }
+        }
 
         if(!target_in_cycle)
         {
-          *int_it = goto_programt::make_assertion(
-            false_exprt(), int_it->source_location);
+          instruction = goto_programt::make_assertion(
+            false_exprt(), instruction.source_location);
           break;
         }
       }
     }
+  }
 
   /* now test whether this part of the code can exist */
   goto_functionst::function_mapt map;

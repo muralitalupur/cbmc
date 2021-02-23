@@ -16,6 +16,7 @@ Date:   December 2014
 #include "remove_asm.h"
 
 #include <util/c_types.h>
+#include <util/pointer_expr.h>
 #include <util/string_constant.h>
 
 #include <goto-programs/goto_model.h>
@@ -101,7 +102,6 @@ void remove_asmt::gcc_asm_function_call(
   }
 
   code_typet fkt_type({}, empty_typet());
-  fkt_type.make_ellipsis();
 
   symbol_exprt fkt(function_identifier, fkt_type);
 
@@ -122,14 +122,14 @@ void remove_asmt::gcc_asm_function_call(
     symbol.mode = ID_C;
 
     symbol_table.add(symbol);
-  }
 
-  if(
-    goto_functions.function_map.find(function_identifier) ==
-    goto_functions.function_map.end())
+    goto_functions.function_map.emplace(function_identifier, goto_functiont());
+  }
+  else
   {
-    auto &f = goto_functions.function_map[function_identifier];
-    f.type = fkt_type;
+    DATA_INVARIANT(
+      symbol_table.lookup_ref(function_identifier).type == fkt_type,
+      "function types should match");
   }
 }
 
@@ -150,7 +150,6 @@ void remove_asmt::msc_asm_function_call(
   const typet void_pointer = pointer_type(empty_typet());
 
   code_typet fkt_type({}, empty_typet());
-  fkt_type.make_ellipsis();
 
   symbol_exprt fkt(function_identifier, fkt_type);
 
@@ -171,14 +170,14 @@ void remove_asmt::msc_asm_function_call(
     symbol.mode = ID_C;
 
     symbol_table.add(symbol);
-  }
 
-  if(
-    goto_functions.function_map.find(function_identifier) ==
-    goto_functions.function_map.end())
+    goto_functions.function_map.emplace(function_identifier, goto_functiont());
+  }
+  else
   {
-    auto &f = goto_functions.function_map[function_identifier];
-    f.type = fkt_type;
+    DATA_INVARIANT(
+      symbol_table.lookup_ref(function_identifier).type == fkt_type,
+      "function types should match");
   }
 }
 

@@ -11,6 +11,8 @@ Author: Daniel Kroening, kroening@kroening.com
 #include "smt2_format.h"
 
 #include <util/arith_tools.h>
+#include <util/bitvector_expr.h>
+#include <util/floatbv_expr.h>
 #include <util/ieee_float.h>
 #include <util/invariant.h>
 #include <util/mathematical_expr.h>
@@ -674,7 +676,9 @@ exprt smt2_parsert::function_application()
           }
           else if(id == ID_repeat)
           {
-            return nil_exprt();
+            auto i = from_integer(index, integer_typet());
+            auto width = to_unsignedbv_type(op[0].type()).get_width() * index;
+            return replication_exprt(i, op[0], unsignedbv_typet(width));
           }
           else
             return nil_exprt();
@@ -870,6 +874,12 @@ void smt2_parsert::setup_expressions()
     return binary_predicate(ID_gt, cast_bv_to_signed(operands()));
   };
 
+  expressions["bvcomp"] = [this] {
+    auto b0 = from_integer(0, unsignedbv_typet(1));
+    auto b1 = from_integer(1, unsignedbv_typet(1));
+    return if_exprt(binary_predicate(ID_equal, operands()), b1, b0);
+  };
+
   expressions["bvashr"] = [this] {
     return cast_bv_to_unsigned(binary(ID_ashr, cast_bv_to_signed(operands())));
   };
@@ -890,9 +900,16 @@ void smt2_parsert::setup_expressions()
   expressions["bvadd"] = [this] { return multi_ary(ID_plus, operands()); };
   expressions["+"] = [this] { return multi_ary(ID_plus, operands()); };
   expressions["bvsub"] = [this] { return binary(ID_minus, operands()); };
-  expressions["-"] = [this] { return binary(ID_minus, operands()); };
   expressions["bvmul"] = [this] { return binary(ID_mult, operands()); };
   expressions["*"] = [this] { return binary(ID_mult, operands()); };
+
+  expressions["-"] = [this] {
+    auto op = operands();
+    if(op.size() == 1)
+      return unary(ID_unary_minus, op);
+    else
+      return binary(ID_minus, op);
+  };
 
   expressions["bvsdiv"] = [this] {
     return cast_bv_to_unsigned(binary(ID_div, cast_bv_to_signed(operands())));
@@ -933,7 +950,23 @@ void smt2_parsert::setup_expressions()
 
   expressions["distinct"] = [this] {
     // pair-wise different constraint, multi-ary
-    return multi_ary("distinct", operands());
+    auto op = operands();
+    if(op.size() == 2)
+      return binary_predicate(ID_notequal, op);
+    else
+    {
+      std::vector<exprt> pairwise_constraints;
+      for(std::size_t i = 0; i < op.size(); i++)
+      {
+        for(std::size_t j = i; j < op.size(); j++)
+        {
+          if(i != j)
+            pairwise_constraints.push_back(
+              binary_exprt(op[i], ID_notequal, op[j], bool_typet()));
+        }
+      }
+      return multi_ary(ID_and, pairwise_constraints);
+    }
   };
 
   expressions["ite"] = [this] {
@@ -1213,18 +1246,7 @@ typet smt2_parsert::function_signature_declaration()
   mathematical_function_typet::domaint domain;
 
   while(smt2_tokenizer.peek() != smt2_tokenizert::CLOSE)
-  {
-    if(next_token() != smt2_tokenizert::OPEN)
-      throw error("expected '(' at beginning of parameter");
-
-    if(next_token() != smt2_tokenizert::SYMBOL)
-      throw error("expected symbol in parameter");
-
     domain.push_back(sort());
-
-    if(next_token() != smt2_tokenizert::CLOSE)
-      throw error("expected ')' at end of parameter");
-  }
 
   next_token(); // eat the ')'
 

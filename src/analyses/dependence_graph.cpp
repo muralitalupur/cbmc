@@ -14,8 +14,6 @@ Date: August 2013
 
 #include "dependence_graph.h"
 
-#include <cassert>
-
 #include <util/container_utils.h>
 #include <util/json_irep.h>
 
@@ -163,11 +161,11 @@ void dep_graph_domaint::data_dependencies(
   rw_range_set_value_sett rw_set(ns, value_sets);
   goto_rw(function_to, to, rw_set);
 
-  forall_rw_range_set_r_objects(it, rw_set)
+  for(const auto &read_object_entry : rw_set.get_r_set())
   {
-    const range_domaint &r_ranges=rw_set.get_ranges(it);
-    const rd_range_domaint::ranges_at_loct &w_ranges=
-      dep_graph.reaching_definitions()[to].get(it->first);
+    const range_domaint &r_ranges = rw_set.get_ranges(read_object_entry.second);
+    const rd_range_domaint::ranges_at_loct &w_ranges =
+      dep_graph.reaching_definitions()[to].get(read_object_entry.first);
 
     for(const auto &w_range : w_ranges)
     {
@@ -188,18 +186,21 @@ void dep_graph_domaint::data_dependencies(
       }
     }
 
-    dep_graph.reaching_definitions()[to].clear_cache(it->first);
+    dep_graph.reaching_definitions()[to].clear_cache(read_object_entry.first);
   }
 }
 
 void dep_graph_domaint::transform(
   const irep_idt &function_from,
-  goto_programt::const_targett from,
+  trace_ptrt trace_from,
   const irep_idt &function_to,
-  goto_programt::const_targett to,
+  trace_ptrt trace_to,
   ai_baset &ai,
   const namespacet &ns)
 {
+  locationt from{trace_from->current_location()};
+  locationt to{trace_to->current_location()};
+
   dependence_grapht *dep_graph=dynamic_cast<dependence_grapht*>(&ai);
   assert(dep_graph!=nullptr);
 

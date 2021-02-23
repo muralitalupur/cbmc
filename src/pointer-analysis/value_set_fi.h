@@ -39,7 +39,7 @@ public:
   unsigned to_function, from_function;
   unsigned to_target_index, from_target_index;
   static object_numberingt object_numbering;
-  static hash_numbering<irep_idt, irep_id_hash> function_numbering;
+  static numberingt<irep_idt> function_numbering;
 
   void set_from(const irep_idt &function, unsigned inx)
   {
@@ -204,12 +204,6 @@ public:
   typedef std::unordered_set<idt, string_hash> recfind_recursion_sett;
   typedef std::unordered_set<idt, string_hash> assign_recursion_sett;
   #endif
-
-  DEPRECATED(SINCE(2019, 05, 22, "Use the version returning vector instead"))
-  void get_value_set(
-    const exprt &expr,
-    std::list<exprt> &dest,
-    const namespacet &ns) const;
 
   std::vector<exprt>
   get_value_set(const exprt &expr, const namespacet &ns) const;

@@ -178,8 +178,7 @@ goto_symex_statet::rename(exprt expr, const namespacet &ns)
       level == L2,
     "must handle all renaming levels");
 
-  if(expr.id()==ID_symbol &&
-     expr.get_bool(ID_C_SSA_symbol))
+  if(is_ssa_expr(expr))
   {
     exprt original_expr = expr;
     ssa_exprt &ssa=to_ssa_expr(expr);
@@ -250,6 +249,10 @@ goto_symex_statet::rename(exprt expr, const namespacet &ns)
     rename_address<level>(address_of_expr.object(), ns);
     to_pointer_type(expr.type()).subtype() =
       as_const(address_of_expr).object().type();
+    return renamedt<exprt, level>{std::move(expr)};
+  }
+  else if(expr.is_nil())
+  {
     return renamedt<exprt, level>{std::move(expr)};
   }
   else
@@ -392,9 +395,9 @@ bool goto_symex_statet::l2_thread_read_encoding(
         guardt g = guard_in_list;
         g-=guard;
         if(g.is_true())
-          // there has already been a write to l1_identifier within
-          // this atomic section under the same guard, or a guard
-          // that implies the current one
+          // There has already been a write to l1_identifier within this atomic
+          // section under the same guard, or a guard implied by the current
+          // one.
           return false;
 
         write_guard |= guard_in_list;
@@ -414,9 +417,8 @@ bool goto_symex_statet::l2_thread_read_encoding(
       guardt g = a_s_read_guard; // copy
       g-=guard;
       if(g.is_true())
-        // there has already been a read l1_identifier within
-        // this atomic section under the same guard, or a guard
-        // that implies the current one
+        // There has already been a read of l1_identifier within this atomic
+        // section under the same guard, or a guard implied by the current one.
         return false;
 
       read_guard |= a_s_read_guard;
@@ -426,20 +428,29 @@ bool goto_symex_statet::l2_thread_read_encoding(
     if(!no_write.op().is_false())
       cond |= guardt{no_write.op(), guard_manager};
 
-    const renamedt<ssa_exprt, L2> l2_true_case = set_indices<L2>(ssa_l1, ns);
+    // It is safe to perform constant propagation in case we have read or
+    // written this object within the atomic section. We must actually do this,
+    // because goto_state::apply_condition may have placed the latest value in
+    // the propagation map without recording an assignment.
+    auto p_it = propagation.find(ssa_l1.get_identifier());
+    const exprt l2_true_case =
+      p_it.has_value() ? *p_it : set_indices<L2>(ssa_l1, ns).get();
+
+    if(!cond.is_true())
+      level2.increase_generation(l1_identifier, ssa_l1, fresh_l2_name_provider);
 
     if(a_s_read.second.empty())
-    {
-      level2.increase_generation(l1_identifier, ssa_l1, fresh_l2_name_provider);
       a_s_read.first = level2.latest_index(l1_identifier);
-    }
+
     const renamedt<ssa_exprt, L2> l2_false_case = set_indices<L2>(ssa_l1, ns);
 
     exprt tmp;
     if(cond.is_false())
       tmp = l2_false_case.get();
+    else if(cond.is_true())
+      tmp = l2_true_case;
     else
-      tmp = if_exprt{cond.as_expr(), l2_true_case.get(), l2_false_case.get()};
+      tmp = if_exprt{cond.as_expr(), l2_true_case, l2_false_case.get()};
 
     record_events.push(false);
     ssa_exprt ssa_l2 = assignment(std::move(ssa_l1), tmp, ns, true, true).get();
@@ -542,8 +553,7 @@ bool goto_symex_statet::l2_thread_write_encoding(
 template <levelt level>
 void goto_symex_statet::rename_address(exprt &expr, const namespacet &ns)
 {
-  if(expr.id()==ID_symbol &&
-     expr.get_bool(ID_C_SSA_symbol))
+  if(is_ssa_expr(expr))
   {
     ssa_exprt &ssa=to_ssa_expr(expr);
 
@@ -747,8 +757,7 @@ static void get_l1_name(exprt &expr)
 {
   // do not reset the type !
 
-  if(expr.id()==ID_symbol &&
-     expr.get_bool(ID_C_SSA_symbol))
+  if(is_ssa_expr(expr))
     to_ssa_expr(expr).remove_level_2();
   else
     Forall_operands(it, expr)
@@ -842,7 +851,7 @@ ssa_exprt goto_symex_statet::declare(ssa_exprt ssa, const namespacet &ns)
   record_events.push(false);
   exprt expr_l2 = rename(std::move(ssa), ns).get();
   INVARIANT(
-    expr_l2.id() == ID_symbol && expr_l2.get_bool(ID_C_SSA_symbol),
+    is_ssa_expr(expr_l2),
     "symbol to declare should not be replaced by constant propagation");
   ssa = to_ssa_expr(expr_l2);
   record_events.pop();

@@ -15,15 +15,18 @@ Author: Daniel Kroening, kroening@kroening.com
 
 #include <util/arith_tools.h>
 #include <util/array_name.h>
+#include <util/bitvector_expr.h>
 #include <util/c_types.h>
 #include <util/config.h>
 #include <util/cprover_prefix.h>
 #include <util/expr_util.h>
 #include <util/find_symbols.h>
+#include <util/floatbv_expr.h>
 #include <util/ieee_float.h>
 #include <util/invariant.h>
 #include <util/make_unique.h>
 #include <util/options.h>
+#include <util/pointer_expr.h>
 #include <util/pointer_offset_size.h>
 #include <util/pointer_predicates.h>
 #include <util/prefix.h>
@@ -67,7 +70,7 @@ public:
       _options.get_bool_option("float-overflow-check");
     enable_simplify=_options.get_bool_option("simplify");
     enable_nan_check=_options.get_bool_option("nan-check");
-    retain_trivial=_options.get_bool_option("retain-trivial");
+    retain_trivial = _options.get_bool_option("retain-trivial-checks");
     enable_assert_to_assume=_options.get_bool_option("assert-to-assume");
     enable_assertions=_options.get_bool_option("assertions");
     enable_built_in_assertions=_options.get_bool_option("built-in-assertions");
@@ -175,7 +178,7 @@ protected:
   void mod_overflow_check(const mod_exprt &, const guardt &);
   void enum_range_check(const exprt &, const guardt &);
   void undefined_shift_check(const shift_exprt &, const guardt &);
-  void pointer_rel_check(const binary_relation_exprt &, const guardt &);
+  void pointer_rel_check(const binary_exprt &, const guardt &);
   void pointer_overflow_check(const exprt &, const guardt &);
 
   /// Generates VCCs for the validity of the given dereferencing operation.
@@ -202,7 +205,18 @@ protected:
   /// \return true if the given expression is a pointer primitive
   bool is_pointer_primitive(const exprt &expr);
 
-  conditionst address_check(const exprt &address, const exprt &size);
+  optionalt<goto_checkt::conditiont>
+  get_pointer_is_null_condition(const exprt &address, const exprt &size);
+  conditionst get_pointer_points_to_valid_memory_conditions(
+    const exprt &address,
+    const exprt &size);
+  exprt is_in_bounds_of_some_explicit_allocation(
+    const exprt &pointer,
+    const exprt &size);
+
+  conditionst get_pointer_dereferenceable_conditions(
+    const exprt &address,
+    const exprt &size);
   void integer_overflow_check(const exprt &, const guardt &);
   void conversion_check(const exprt &, const guardt &);
   void float_overflow_check(const exprt &, const guardt &);
@@ -228,7 +242,7 @@ protected:
     const guardt &guard);
 
   goto_programt new_code;
-  typedef std::set<exprt> assertionst;
+  typedef std::set<std::pair<exprt, exprt>> assertionst;
   assertionst assertions;
 
   /// Remove all assertions containing the symbol in \p lhs as well as all
@@ -272,13 +286,17 @@ protected:
 void goto_checkt::collect_allocations(
   const goto_functionst &goto_functions)
 {
-  if(!enable_pointer_check && !enable_bounds_check)
+  if(
+    !enable_pointer_check && !enable_bounds_check &&
+    !enable_pointer_overflow_check)
+  {
     return;
+  }
 
-  forall_goto_functions(itf, goto_functions)
-    forall_goto_program_instructions(it, itf->second.body)
+  for(const auto &gf_entry : goto_functions.function_map)
+  {
+    for(const auto &instruction : gf_entry.second.body.instructions)
     {
-      const goto_programt::instructiont &instruction=*it;
       if(!instruction.is_function_call())
         continue;
 
@@ -299,6 +317,7 @@ void goto_checkt::collect_allocations(
       assert(args[0].type()==args[1].type());
       allocations.push_back({args[0], args[1]});
     }
+  }
 }
 
 void goto_checkt::invalidate(const exprt &lhs)
@@ -314,8 +333,12 @@ void goto_checkt::invalidate(const exprt &lhs)
 
     for(auto it = assertions.begin(); it != assertions.end();)
     {
-      if(has_symbol(*it, find_symbols_set) || has_subexpr(*it, ID_dereference))
+      if(
+        has_symbol(it->second, find_symbols_set) ||
+        has_subexpr(it->second, ID_dereference))
+      {
         it = assertions.erase(it);
+      }
       else
         ++it;
     }
@@ -1102,7 +1125,7 @@ void goto_checkt::nan_check(
 }
 
 void goto_checkt::pointer_rel_check(
-  const binary_relation_exprt &expr,
+  const binary_exprt &expr,
   const guardt &guard)
 {
   if(!enable_pointer_check)
@@ -1113,17 +1136,33 @@ void goto_checkt::pointer_rel_check(
   {
     // add same-object subgoal
 
-    if(enable_pointer_check)
-    {
-      exprt same_object=::same_object(expr.op0(), expr.op1());
+    exprt same_object = ::same_object(expr.op0(), expr.op1());
 
-      add_guarded_property(
-        same_object,
-        "same object violation",
-        "pointer",
-        expr.find_source_location(),
-        expr,
-        guard);
+    add_guarded_property(
+      same_object,
+      "same object violation",
+      "pointer",
+      expr.find_source_location(),
+      expr,
+      guard);
+
+    for(const auto &pointer : expr.operands())
+    {
+      // just this particular byte must be within object bounds or one past the
+      // end
+      const auto size = from_integer(0, size_type());
+      auto conditions = get_pointer_dereferenceable_conditions(pointer, size);
+
+      for(const auto &c : conditions)
+      {
+        add_guarded_property(
+          c.assertion,
+          "pointer relation: " + c.description,
+          "pointer arithmetic",
+          expr.find_source_location(),
+          pointer,
+          guard);
+      }
     }
   }
 }
@@ -1142,16 +1181,20 @@ void goto_checkt::pointer_overflow_check(
     expr.operands().size() == 2,
     "pointer arithmetic expected to have exactly 2 operands");
 
-  exprt overflow("overflow-" + expr.id_string(), bool_typet());
-  overflow.operands() = expr.operands();
+  // the result must be within object bounds or one past the end
+  const auto size = from_integer(0, size_type());
+  auto conditions = get_pointer_dereferenceable_conditions(expr, size);
 
-  add_guarded_property(
-    not_exprt(overflow),
-    "pointer arithmetic overflow on " + expr.id_string(),
-    "overflow",
-    expr.find_source_location(),
-    expr,
-    guard);
+  for(const auto &c : conditions)
+  {
+    add_guarded_property(
+      c.assertion,
+      "pointer arithmetic: " + c.description,
+      "pointer arithmetic",
+      expr.find_source_location(),
+      expr,
+      guard);
+  }
 }
 
 void goto_checkt::pointer_validity_check(
@@ -1181,7 +1224,7 @@ void goto_checkt::pointer_validity_check(
     size = size_of_expr_opt.value();
   }
 
-  auto conditions = address_check(pointer, size);
+  auto conditions = get_pointer_dereferenceable_conditions(pointer, size);
 
   for(const auto &c : conditions)
   {
@@ -1225,22 +1268,18 @@ void goto_checkt::pointer_primitive_check(
                        ? from_integer(1, size_type())
                        : size_of_expr_opt.value();
 
-  const conditionst &conditions = address_check(pointer, size);
-
-  exprt::operandst conjuncts;
-
+  const conditionst &conditions =
+    get_pointer_points_to_valid_memory_conditions(pointer, size);
   for(const auto &c : conditions)
-    conjuncts.push_back(c.assertion);
-
-  const or_exprt or_expr(null_object(pointer), conjunction(conjuncts));
-
-  add_guarded_property(
-    or_expr,
-    "pointer in pointer primitive is neither null nor valid",
-    "pointer primitives",
-    expr.source_location(),
-    expr,
-    guard);
+  {
+    add_guarded_property(
+      or_exprt{null_object(pointer), c.assertion},
+      c.description,
+      "pointer primitives",
+      expr.source_location(),
+      expr,
+      guard);
+  }
 }
 
 bool goto_checkt::is_pointer_primitive(const exprt &expr)
@@ -1253,123 +1292,17 @@ bool goto_checkt::is_pointer_primitive(const exprt &expr)
          expr.id() == ID_w_ok || expr.id() == ID_is_dynamic_object;
 }
 
-goto_checkt::conditionst
-goto_checkt::address_check(const exprt &address, const exprt &size)
+goto_checkt::conditionst goto_checkt::get_pointer_dereferenceable_conditions(
+  const exprt &address,
+  const exprt &size)
 {
-  PRECONDITION(local_bitvector_analysis);
-  PRECONDITION(address.type().id() == ID_pointer);
-  const auto &pointer_type = to_pointer_type(address.type());
-
-  local_bitvector_analysist::flagst flags =
-    local_bitvector_analysis->get(current_target, address);
-
-  // For Java, we only need to check for null
-  if(mode == ID_java)
+  auto conditions =
+    get_pointer_points_to_valid_memory_conditions(address, size);
+  if(auto maybe_null_condition = get_pointer_is_null_condition(address, size))
   {
-    if(flags.is_unknown() || flags.is_null())
-    {
-      notequal_exprt not_eq_null(address, null_pointer_exprt(pointer_type));
-
-      return {conditiont(not_eq_null, "reference is null")};
-    }
-    else
-      return {};
+    conditions.push_front(*maybe_null_condition);
   }
-  else
-  {
-    conditionst conditions;
-    exprt::operandst alloc_disjuncts;
-
-    for(const auto &a : allocations)
-    {
-      typecast_exprt int_ptr(address, a.first.type());
-
-      binary_relation_exprt lb_check(a.first, ID_le, int_ptr);
-
-      plus_exprt ub{int_ptr, size};
-
-      binary_relation_exprt ub_check(ub, ID_le, plus_exprt(a.first, a.second));
-
-      alloc_disjuncts.push_back(and_exprt(lb_check, ub_check));
-    }
-
-    const exprt in_bounds_of_some_explicit_allocation =
-      disjunction(alloc_disjuncts);
-
-    const bool unknown = flags.is_unknown() || flags.is_uninitialized();
-
-    if(unknown)
-    {
-      conditions.push_back(conditiont{
-        not_exprt{is_invalid_pointer_exprt{address}}, "pointer invalid"});
-    }
-
-    if(unknown || flags.is_null())
-    {
-      conditions.push_back(conditiont(
-        or_exprt(
-          in_bounds_of_some_explicit_allocation,
-          not_exprt(null_pointer(address))),
-        "pointer NULL"));
-    }
-
-    if(unknown || flags.is_dynamic_heap())
-    {
-      conditions.push_back(conditiont(
-        or_exprt(
-          in_bounds_of_some_explicit_allocation,
-          not_exprt(deallocated(address, ns))),
-        "deallocated dynamic object"));
-    }
-
-    if(unknown || flags.is_dynamic_local())
-    {
-      conditions.push_back(conditiont(
-        or_exprt(
-          in_bounds_of_some_explicit_allocation,
-          not_exprt(dead_object(address, ns))),
-        "dead object"));
-    }
-
-    if(unknown || flags.is_dynamic_heap())
-    {
-      const or_exprt object_bounds_violation(
-        object_lower_bound(address, nil_exprt()),
-        object_upper_bound(address, size));
-
-      conditions.push_back(conditiont(
-        or_exprt(
-          in_bounds_of_some_explicit_allocation,
-          implies_exprt(
-            dynamic_object(address), not_exprt(object_bounds_violation))),
-        "pointer outside dynamic object bounds"));
-    }
-
-    if(unknown || flags.is_dynamic_local() || flags.is_static_lifetime())
-    {
-      const or_exprt object_bounds_violation(
-        object_lower_bound(address, nil_exprt()),
-        object_upper_bound(address, size));
-
-      conditions.push_back(conditiont(
-        or_exprt(
-          in_bounds_of_some_explicit_allocation,
-          implies_exprt(
-            not_exprt(dynamic_object(address)),
-            not_exprt(object_bounds_violation))),
-        "pointer outside object bounds"));
-    }
-
-    if(unknown || flags.is_integer_address())
-    {
-      conditions.push_back(conditiont(
-        implies_exprt(
-          integer_address(address), in_bounds_of_some_explicit_allocation),
-        "invalid integer address"));
-    }
-
-    return conditions;
-  }
+  return conditions;
 }
 
 std::string goto_checkt::array_name(const exprt &expr)
@@ -1600,7 +1533,7 @@ void goto_checkt::add_guarded_property(
       ? std::move(simplified_expr)
       : implies_exprt{guard.as_expr(), std::move(simplified_expr)};
 
-  if(assertions.insert(guarded_expr).second)
+  if(assertions.insert(std::make_pair(src_expr, guarded_expr)).second)
   {
     auto t = new_code.add(
       enable_assert_to_assume ? goto_programt::make_assumption(
@@ -1740,6 +1673,14 @@ void goto_checkt::check_rec_arithmetic_op(const exprt &expr, guardt &guard)
   if(expr.type().id() == ID_signedbv || expr.type().id() == ID_unsignedbv)
   {
     integer_overflow_check(expr, guard);
+
+    if(
+      expr.operands().size() == 2 && expr.id() == ID_minus &&
+      expr.operands()[0].type().id() == ID_pointer &&
+      expr.operands()[1].type().id() == ID_pointer)
+    {
+      pointer_rel_check(to_binary_expr(expr), guard);
+    }
   }
   else if(expr.type().id() == ID_floatbv)
   {
@@ -1855,8 +1796,8 @@ optionalt<exprt> goto_checkt::rw_ok_check(exprt expr)
     DATA_INVARIANT(
       expr.operands().size() == 2, "r/w_ok must have two operands");
 
-    const auto conditions =
-      address_check(to_binary_expr(expr).op0(), to_binary_expr(expr).op1());
+    const auto conditions = get_pointer_dereferenceable_conditions(
+      to_binary_expr(expr).op0(), to_binary_expr(expr).op1());
 
     exprt::operandst conjuncts;
 
@@ -2188,28 +2129,33 @@ void goto_checkt::goto_check(
       }
     }
 
-    Forall_goto_program_instructions(i_it, new_code)
+    for(auto &instruction : new_code.instructions)
     {
-      if(i_it->source_location.is_nil())
+      if(instruction.source_location.is_nil())
       {
-        i_it->source_location.id(irep_idt());
+        instruction.source_location.id(irep_idt());
 
         if(!it->source_location.get_file().empty())
-          i_it->source_location.set_file(it->source_location.get_file());
+          instruction.source_location.set_file(it->source_location.get_file());
 
         if(!it->source_location.get_line().empty())
-          i_it->source_location.set_line(it->source_location.get_line());
+          instruction.source_location.set_line(it->source_location.get_line());
 
         if(!it->source_location.get_function().empty())
-          i_it->source_location.set_function(
+          instruction.source_location.set_function(
             it->source_location.get_function());
 
         if(!it->source_location.get_column().empty())
-          i_it->source_location.set_column(it->source_location.get_column());
+        {
+          instruction.source_location.set_column(
+            it->source_location.get_column());
+        }
 
         if(!it->source_location.get_java_bytecode_index().empty())
-          i_it->source_location.set_java_bytecode_index(
+        {
+          instruction.source_location.set_java_bytecode_index(
             it->source_location.get_java_bytecode_index());
+        }
       }
     }
 
@@ -2226,6 +2172,140 @@ void goto_checkt::goto_check(
 
   if(did_something)
     remove_skip(goto_program);
+}
+
+goto_checkt::conditionst
+goto_checkt::get_pointer_points_to_valid_memory_conditions(
+  const exprt &address,
+  const exprt &size)
+{
+  PRECONDITION(local_bitvector_analysis);
+  PRECONDITION(address.type().id() == ID_pointer);
+  local_bitvector_analysist::flagst flags =
+    local_bitvector_analysis->get(current_target, address);
+
+  conditionst conditions;
+
+  if(mode == ID_java)
+  {
+    // The following conditions don’t apply to Java
+    return conditions;
+  }
+
+  const exprt in_bounds_of_some_explicit_allocation =
+    is_in_bounds_of_some_explicit_allocation(address, size);
+
+  const bool unknown = flags.is_unknown() || flags.is_uninitialized();
+
+  if(unknown)
+  {
+    conditions.push_back(conditiont{
+      not_exprt{is_invalid_pointer_exprt{address}}, "pointer invalid"});
+  }
+
+  if(unknown || flags.is_dynamic_heap())
+  {
+    conditions.push_back(conditiont(
+      or_exprt(
+        in_bounds_of_some_explicit_allocation,
+        not_exprt(deallocated(address, ns))),
+      "deallocated dynamic object"));
+  }
+
+  if(unknown || flags.is_dynamic_local())
+  {
+    conditions.push_back(conditiont(
+      or_exprt(
+        in_bounds_of_some_explicit_allocation,
+        not_exprt(dead_object(address, ns))),
+      "dead object"));
+  }
+
+  if(unknown || flags.is_dynamic_heap())
+  {
+    const or_exprt object_bounds_violation(
+      object_lower_bound(address, nil_exprt()),
+      object_upper_bound(address, size));
+
+    conditions.push_back(conditiont(
+      or_exprt(
+        in_bounds_of_some_explicit_allocation,
+        implies_exprt(
+          dynamic_object(address), not_exprt(object_bounds_violation))),
+      "pointer outside dynamic object bounds"));
+  }
+
+  if(unknown || flags.is_dynamic_local() || flags.is_static_lifetime())
+  {
+    const or_exprt object_bounds_violation(
+      object_lower_bound(address, nil_exprt()),
+      object_upper_bound(address, size));
+
+    conditions.push_back(conditiont(
+      or_exprt(
+        in_bounds_of_some_explicit_allocation,
+        implies_exprt(
+          not_exprt(dynamic_object(address)),
+          not_exprt(object_bounds_violation))),
+      "pointer outside object bounds"));
+  }
+
+  if(unknown || flags.is_integer_address())
+  {
+    conditions.push_back(conditiont(
+      implies_exprt(
+        integer_address(address), in_bounds_of_some_explicit_allocation),
+      "invalid integer address"));
+  }
+
+  return conditions;
+}
+
+optionalt<goto_checkt::conditiont> goto_checkt::get_pointer_is_null_condition(
+  const exprt &address,
+  const exprt &size)
+{
+  PRECONDITION(local_bitvector_analysis);
+  PRECONDITION(address.type().id() == ID_pointer);
+  const auto &pointer_type = to_pointer_type(address.type());
+  local_bitvector_analysist::flagst flags =
+    local_bitvector_analysis->get(current_target, address);
+  if(mode == ID_java)
+  {
+    if(flags.is_unknown() || flags.is_null())
+    {
+      notequal_exprt not_eq_null(address, null_pointer_exprt{pointer_type});
+      return {conditiont{not_eq_null, "reference is null"}};
+    }
+  }
+  else if(flags.is_unknown() || flags.is_uninitialized() || flags.is_null())
+  {
+    return {conditiont{
+      or_exprt{is_in_bounds_of_some_explicit_allocation(address, size),
+               not_exprt(null_pointer(address))},
+      "pointer NULL"}};
+  }
+  return {};
+}
+
+exprt goto_checkt::is_in_bounds_of_some_explicit_allocation(
+  const exprt &pointer,
+  const exprt &size)
+{
+  exprt::operandst alloc_disjuncts;
+  for(const auto &a : allocations)
+  {
+    typecast_exprt int_ptr(pointer, a.first.type());
+
+    binary_relation_exprt lb_check(a.first, ID_le, int_ptr);
+
+    plus_exprt ub{int_ptr, size};
+
+    binary_relation_exprt ub_check(ub, ID_le, plus_exprt(a.first, a.second));
+
+    alloc_disjuncts.push_back(and_exprt(lb_check, ub_check));
+  }
+  return disjunction(alloc_disjuncts);
 }
 
 void goto_check(
@@ -2247,9 +2327,9 @@ void goto_check(
 
   goto_check.collect_allocations(goto_functions);
 
-  Forall_goto_functions(it, goto_functions)
+  for(auto &gf_entry : goto_functions.function_map)
   {
-    goto_check.goto_check(it->first, it->second);
+    goto_check.goto_check(gf_entry.first, gf_entry.second);
   }
 }
 

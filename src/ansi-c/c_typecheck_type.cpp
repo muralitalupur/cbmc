@@ -18,6 +18,7 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <util/config.h>
 #include <util/fresh_symbol.h>
 #include <util/mathematical_types.h>
+#include <util/pointer_expr.h>
 #include <util/pointer_offset_size.h>
 #include <util/simplify_expr.h>
 
@@ -847,6 +848,13 @@ void c_typecheck_baset::typecheck_compound_type(struct_union_typet &type)
           symbol_table.get_writeable_ref(s_it->first).type.swap(type);
         }
       }
+      else if(s_it->second.type.id() != type.id())
+      {
+        error().source_location = type.source_location();
+        error() << "redefinition of '" << s_it->second.pretty_name << "'"
+                << " as different kind of tag" << eom;
+        throw 0;
+      }
       else if(have_body)
       {
         error().source_location=type.source_location();
@@ -931,6 +939,13 @@ void c_typecheck_baset::typecheck_compound_body(
         {
           error().source_location = source_location;
           error() << "incomplete type not permitted here" << eom;
+          throw 0;
+        }
+
+        if(new_component.type().id() == ID_empty)
+        {
+          error().source_location = source_location;
+          error() << "void-typed member not permitted" << eom;
           throw 0;
         }
 
@@ -1029,6 +1044,13 @@ void c_typecheck_baset::typecheck_compound_body(
   {
     if(it->id()==ID_static_assert)
     {
+      if(config.ansi_c.mode == configt::ansi_ct::flavourt::VISUAL_STUDIO)
+      {
+        error().source_location = it->source_location();
+        error() << "static_assert not supported in compound body" << eom;
+        throw 0;
+      }
+
       exprt &assertion = to_binary_expr(*it).op0();
       typecheck_expr(assertion);
       typecheck_expr(to_binary_expr(*it).op1());

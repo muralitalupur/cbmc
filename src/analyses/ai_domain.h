@@ -40,6 +40,7 @@ Author: Daniel Kroening, kroening@kroening.com
 #ifndef CPROVER_ANALYSES_AI_DOMAIN_H
 #define CPROVER_ANALYSES_AI_DOMAIN_H
 
+#include <util/deprecate.h>
 #include <util/expr.h>
 #include <util/json.h>
 #include <util/make_unique.h>
@@ -101,24 +102,6 @@ public:
     trace_ptrt from,
     const irep_idt &function_to,
     trace_ptrt to,
-    ai_baset &ai,
-    const namespacet &ns)
-  {
-    return transform(
-      function_from,
-      from->current_location(),
-      function_to,
-      to->current_location(),
-      ai,
-      ns);
-  }
-
-  DEPRECATED(SINCE(2019, 08, 01, "use the history signature instead"))
-  virtual void transform(
-    const irep_idt &function_from,
-    locationt from,
-    const irep_idt &function_to,
-    locationt to,
     ai_baset &ai,
     const namespacet &ns) = 0;
 

@@ -156,7 +156,7 @@ get_interface_methods(const irep_idt &interface_id, const namespacet &ns)
   {
     const methods_by_name_and_descriptort base_methods =
       get_interface_methods(base.type().get_identifier(), ns);
-    for(const auto base_method : base_methods)
+    for(const auto &base_method : base_methods)
     {
       if(base_method.second)
       {
@@ -325,12 +325,11 @@ static symbolt constructor_symbol(
       id2string(constructor_name) + "::" + id2string(param_basename));
   }
 
-  java_method_typet::parametert constructor_this_param;
+  java_method_typet::parametert constructor_this_param(
+    java_reference_type(struct_tag_typet(synthetic_class_name)));
   constructor_this_param.set_this();
   constructor_this_param.set_base_name("this");
   constructor_this_param.set_identifier(id2string(constructor_name) + "::this");
-  constructor_this_param.type() =
-    java_reference_type(struct_tag_typet(synthetic_class_name));
 
   constructor_type.parameters().insert(
     constructor_type.parameters().begin(), constructor_this_param);

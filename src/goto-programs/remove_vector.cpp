@@ -25,11 +25,14 @@ static bool have_to_remove_vector(const exprt &expr)
 {
   if(expr.type().id()==ID_vector)
   {
-    if(expr.id()==ID_plus || expr.id()==ID_minus ||
-       expr.id()==ID_mult || expr.id()==ID_div ||
-       expr.id()==ID_mod  || expr.id()==ID_bitxor ||
-       expr.id()==ID_bitand || expr.id()==ID_bitor)
+    if(
+      expr.id() == ID_plus || expr.id() == ID_minus || expr.id() == ID_mult ||
+      expr.id() == ID_div || expr.id() == ID_mod || expr.id() == ID_bitxor ||
+      expr.id() == ID_bitand || expr.id() == ID_bitor || expr.id() == ID_shl ||
+      expr.id() == ID_lshr || expr.id() == ID_ashr)
+    {
       return true;
+    }
     else if(expr.id()==ID_unary_minus || expr.id()==ID_bitnot)
       return true;
     else if(expr.id()==ID_vector)
@@ -77,10 +80,11 @@ static void remove_vector(exprt &expr)
 
   if(expr.type().id()==ID_vector)
   {
-    if(expr.id()==ID_plus || expr.id()==ID_minus ||
-       expr.id()==ID_mult || expr.id()==ID_div ||
-       expr.id()==ID_mod  || expr.id()==ID_bitxor ||
-       expr.id()==ID_bitand || expr.id()==ID_bitor)
+    if(
+      expr.id() == ID_plus || expr.id() == ID_minus || expr.id() == ID_mult ||
+      expr.id() == ID_div || expr.id() == ID_mod || expr.id() == ID_bitxor ||
+      expr.id() == ID_bitand || expr.id() == ID_bitor || expr.id() == ID_shl ||
+      expr.id() == ID_lshr || expr.id() == ID_ashr)
     {
       // FIXME plus, mult, bitxor, bitand and bitor are defined as n-ary
       //      operations rather than binary. This code assumes that they
@@ -217,8 +221,6 @@ static void remove_vector(symbol_tablet &symbol_table)
 /// removes vector data type
 void remove_vector(goto_functionst::goto_functiont &goto_function)
 {
-  remove_vector(goto_function.type);
-
   for(auto &i : goto_function.body.instructions)
     i.transform([](exprt e) -> optionalt<exprt> {
       if(have_to_remove_vector(e))
@@ -234,8 +236,8 @@ void remove_vector(goto_functionst::goto_functiont &goto_function)
 /// removes vector data type
 static void remove_vector(goto_functionst &goto_functions)
 {
-  Forall_goto_functions(it, goto_functions)
-    remove_vector(it->second);
+  for(auto &gf_entry : goto_functions.function_map)
+    remove_vector(gf_entry.second);
 }
 
 /// removes vector data type

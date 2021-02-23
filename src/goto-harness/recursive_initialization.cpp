@@ -9,12 +9,14 @@ Author: Diffblue Ltd.
 #include "recursive_initialization.h"
 
 #include <goto-programs/name_mangler.h>
+
 #include <util/allocate_objects.h>
 #include <util/arith_tools.h>
 #include <util/c_types.h>
 #include <util/fresh_symbol.h>
 #include <util/irep.h>
 #include <util/optional_utils.h>
+#include <util/pointer_expr.h>
 #include <util/pointer_offset_size.h>
 #include <util/rename.h>
 #include <util/std_code.h>
@@ -366,8 +368,6 @@ irep_idt recursive_initializationt::build_constructor(const exprt &expr)
     expr_name,
     is_nullable);
 
-  goto_model.goto_functions.function_map[function_symbol.name].type =
-    to_code_type(function_symbol.type);
   return type_constructor_names.at(key);
 }
 

@@ -25,19 +25,19 @@ void list_undefined_functions(
 {
   const namespacet ns(goto_model.symbol_table);
 
-  forall_goto_functions(it, goto_model.goto_functions)
-    if(!ns.lookup(it->first).is_macro &&
-       !it->second.body_available())
-      os << it->first << '\n';
+  for(const auto &gf_entry : goto_model.goto_functions.function_map)
+  {
+    if(!ns.lookup(gf_entry.first).is_macro && !gf_entry.second.body_available())
+      os << gf_entry.first << '\n';
+  }
 }
 
 void undefined_function_abort_path(goto_modelt &goto_model)
 {
-  Forall_goto_functions(it, goto_model.goto_functions)
-    Forall_goto_program_instructions(iit, it->second.body)
+  for(auto &gf_entry : goto_model.goto_functions.function_map)
+  {
+    for(auto &ins : gf_entry.second.body.instructions)
     {
-      goto_programt::instructiont &ins=*iit;
-
       if(!ins.is_function_call())
         continue;
 
@@ -62,4 +62,5 @@ void undefined_function_abort_path(goto_modelt &goto_model)
       ins.source_location.set_comment(
         "'" + id2string(function) + "' is undefined");
     }
+  }
 }

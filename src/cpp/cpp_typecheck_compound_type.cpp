@@ -35,9 +35,11 @@ bool cpp_typecheckt::has_const(const typet &type)
     return true;
   else if(type.id()==ID_merged_type)
   {
-    forall_subtypes(it, type)
-      if(has_const(*it))
+    for(const typet &subtype : to_type_with_subtypes(type).subtypes())
+    {
+      if(has_const(subtype))
         return true;
+    }
 
     return false;
   }
@@ -51,9 +53,11 @@ bool cpp_typecheckt::has_volatile(const typet &type)
     return true;
   else if(type.id()==ID_merged_type)
   {
-    forall_subtypes(it, type)
-      if(has_volatile(*it))
+    for(const typet &subtype : to_type_with_subtypes(type).subtypes())
+    {
+      if(has_volatile(subtype))
         return true;
+    }
 
     return false;
   }
@@ -69,9 +73,11 @@ bool cpp_typecheckt::has_auto(const typet &type)
     type.id() == ID_merged_type || type.id() == ID_frontend_pointer ||
     type.id() == ID_pointer)
   {
-    forall_subtypes(it, type)
-      if(has_auto(*it))
+    for(const typet &subtype : to_type_with_subtypes(type).subtypes())
+    {
+      if(has_auto(subtype))
         return true;
+    }
 
     return false;
   }
@@ -212,6 +218,13 @@ void cpp_typecheckt::typecheck_compound_type(
         throw 0;
       }
     }
+    else if(symbol.type.id() != type.id())
+    {
+      error().source_location = type.source_location();
+      error() << "redefinition of '" << symbol.pretty_name << "'"
+              << " as different kind of tag" << eom;
+      throw 0;
+    }
   }
   else
   {
@@ -316,6 +329,13 @@ void cpp_typecheckt::typecheck_compound_declarator(
   elaborate_class_template(final_type);
 
   typecheck_type(final_type);
+
+  if(final_type.id() == ID_empty)
+  {
+    error().source_location = declaration.type().source_location();
+    error() << "void-typed member not permitted" << eom;
+    throw 0;
+  }
 
   cpp_namet cpp_name;
   cpp_name.swap(declarator.name());
@@ -1243,9 +1263,10 @@ void cpp_typecheckt::move_member_initializers(
       value = code_blockt{{to_code(value)}};
 
     exprt::operandst::iterator o_it=value.operands().begin();
-    forall_irep(it, initializers.get_sub())
+    for(const auto &initializer : initializers.get_sub())
     {
-      o_it=value.operands().insert(o_it, static_cast<const exprt &>(*it));
+      o_it =
+        value.operands().insert(o_it, static_cast<const exprt &>(initializer));
       o_it++;
     }
   }
@@ -1606,10 +1627,8 @@ bool cpp_typecheckt::check_component_access(
   // check friendship
   const irept::subt &friends = struct_union_type.find(ID_C_friends).get_sub();
 
-  forall_irep(f_it, friends)
+  for(const auto &friend_symb : friends)
   {
-    const irept &friend_symb=*f_it;
-
     const cpp_scopet &friend_scope =
       cpp_scopes.get_scope(friend_symb.get(ID_identifier));
 

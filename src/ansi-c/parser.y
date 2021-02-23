@@ -189,6 +189,7 @@ extern char *yyansi_ctext;
 %token TOK_EXISTS      "exists"
 %token TOK_ACSL_FORALL "\\forall"
 %token TOK_ACSL_EXISTS "\\exists"
+%token TOK_ACSL_LAMBDA "\\lambda"
 %token TOK_ACSL_LET    "\\let"
 %token TOK_ARRAY_OF    "array_of"
 %token TOK_CPROVER_BITVECTOR "__CPROVER_bitvector"
@@ -204,6 +205,7 @@ extern char *yyansi_ctext;
 %token TOK_CPROVER_LOOP_INVARIANT  "__CPROVER_loop_invariant"
 %token TOK_CPROVER_REQUIRES  "__CPROVER_requires"
 %token TOK_CPROVER_ENSURES  "__CPROVER_ensures"
+%token TOK_CPROVER_ASSIGNS "__CPROVER_assigns"
 %token TOK_IMPLIES     "==>"
 %token TOK_EQUIVALENT  "<==>"
 %token TOK_XORXOR      "^^"
@@ -437,12 +439,11 @@ offsetof:
 offsetof_member_designator:
           member_name
         {
-          init($$, ID_designated_initializer);
-          parser_stack($$).operands().resize(1);
-          auto &op = to_unary_expr(parser_stack($$)).op();
-          op.id(ID_member);
+          init($$);
+          exprt op{ID_member};
           op.add_source_location()=parser_stack($1).source_location();
           op.set(ID_component_name, parser_stack($1).get(ID_C_base_name));
+          parser_stack($$).add_to_operands(std::move(op));
         }
         | offsetof_member_designator '.' member_name
         {
@@ -508,6 +509,36 @@ ensures_opt:
         { init($$); parser_stack($$).make_nil(); }
         | TOK_CPROVER_ENSURES '(' ACSL_binding_expression ')'
         { $$=$3; }
+        ;
+
+assigns_opt:
+        /* nothing */
+        { init($$); parser_stack($$).make_nil(); }
+        | TOK_CPROVER_ASSIGNS '(' target_list ')'
+        { $$=$3; }
+        ;
+
+target_list:
+          target
+        {
+          init($$, ID_target_list);
+          mto($$, $1);
+        }
+        | target_list ',' target
+        {
+          $$=$1;
+          mto($$, $3);
+        }
+        ;
+
+target:
+          identifier
+        | '*' target
+        {
+          $$=$1;
+          set($$, ID_dereference);
+          mto($$, $2);
+        }
         ;
 
 statement_expression: '(' compound_statement ')'
@@ -824,6 +855,14 @@ ACSL_binding_expression:
         {
           $$=$1;
           set($$, ID_exists);
+          parser_stack($$).add_to_operands(tuple_exprt( { std::move(parser_stack($3)) } ));
+          mto($$, $4);
+          PARSER.pop_scope();
+        }
+        | TOK_ACSL_LAMBDA compound_scope declaration ACSL_binding_expression
+        {
+          $$=$1;
+          set($$, ID_lambda);
           parser_stack($$).add_to_operands(tuple_exprt( { std::move(parser_stack($3)) } ));
           mto($$, $4);
           PARSER.pop_scope();
@@ -2853,14 +2892,21 @@ asm_definition:
 
 function_definition:
           function_head
+          assigns_opt
           requires_opt
           ensures_opt
           function_body
         {
+
+          // Capture assigns clause
           if(parser_stack($2).is_not_nil())
-            parser_stack($1).add(ID_C_spec_requires).swap(parser_stack($2));
+            parser_stack($1).add(ID_C_spec_assigns).swap(parser_stack($2));
+
+          // Capture code contract
           if(parser_stack($3).is_not_nil())
-            parser_stack($1).add(ID_C_spec_ensures).swap(parser_stack($3));
+            parser_stack($1).add(ID_C_spec_requires).swap(parser_stack($3));
+          if(parser_stack($4).is_not_nil())
+            parser_stack($1).add(ID_C_spec_ensures).swap(parser_stack($4));
           // The head is a declaration with one declarator,
           // and the body becomes the 'value'.
           $$=$1;
@@ -2868,7 +2914,7 @@ function_definition:
             to_ansi_c_declaration(parser_stack($$));
             
           assert(ansi_c_declaration.declarators().size()==1);
-          ansi_c_declaration.add_initializer(parser_stack($4));
+          ansi_c_declaration.add_initializer(parser_stack($5));
           
           // Kill the scope that 'function_head' creates.
           PARSER.pop_scope();

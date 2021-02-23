@@ -17,6 +17,7 @@ Date: December 2012
 #include <unordered_set>
 
 #include <util/file_util.h>
+#include <util/pointer_expr.h>
 #include <util/pointer_offset_size.h>
 #include <util/prefix.h>
 
@@ -33,16 +34,19 @@ static void collect_eloc(
   const goto_modelt &goto_model,
   working_dirst &dest)
 {
-  forall_goto_functions(f_it, goto_model.goto_functions)
+  for(const auto &gf_entry : goto_model.goto_functions.function_map)
   {
-    forall_goto_program_instructions(it, f_it->second.body)
+    for(const auto &instruction : gf_entry.second.body.instructions)
     {
-      filest &files=dest[it->source_location.get_working_directory()];
-      const irep_idt &file=it->source_location.get_file();
+      const auto &source_location = instruction.source_location;
 
-      if(!file.empty() &&
-         !it->source_location.is_built_in())
-        files[file].insert(it->source_location.get_line());
+      filest &files = dest[source_location.get_working_directory()];
+      const irep_idt &file = source_location.get_file();
+
+      if(!file.empty() && !source_location.is_built_in())
+      {
+        files[file].insert(source_location.get_line());
+      }
     }
   }
 }
@@ -117,11 +121,14 @@ void print_path_lengths(const goto_modelt &goto_model)
             << " instructions\n";
 
   std::size_t n_loops=0, loop_ins=0;
-  forall_goto_functions(gf_it, goto_model.goto_functions)
-    forall_goto_program_instructions(i_it, gf_it->second.body)
+  for(const auto &gf_entry : goto_model.goto_functions.function_map)
+  {
+    forall_goto_program_instructions(i_it, gf_entry.second.body)
+    {
       // loops or recursion
-      if(i_it->is_backwards_goto() ||
-         i_it==gf_it->second.body.instructions.begin())
+      if(
+        i_it->is_backwards_goto() ||
+        i_it == gf_entry.second.body.instructions.begin())
       {
         const cfgt::entryt &node = cfg.get_node_index(i_it);
         cfgt::patht loop;
@@ -133,6 +140,8 @@ void print_path_lengths(const goto_modelt &goto_model)
           loop_ins+=loop.size()-1;
         }
       }
+    }
+  }
 
   if(n_loops>0)
     std::cout << "Loop information: " << n_loops << " loops, "

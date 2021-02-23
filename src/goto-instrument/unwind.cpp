@@ -240,17 +240,17 @@ void goto_unwindt::unwind(
     unwind_log.insert(t_skip, loop_head->location_number);
 
     // redirect gotos into loop body
-    Forall_goto_program_instructions(i_it, goto_program)
+    for(auto &instruction : goto_program.instructions)
     {
-      if(!i_it->is_goto())
+      if(!instruction.is_goto())
         continue;
 
-      goto_programt::const_targett t=i_it->get_target();
+      goto_programt::const_targett t = instruction.get_target();
 
       if(t->location_number>=loop_head->location_number &&
          t->location_number<loop_exit->location_number)
       {
-        i_it->set_target(t_skip);
+        instruction.set_target(t_skip);
       }
     }
 
@@ -317,20 +317,20 @@ void goto_unwindt::operator()(
   const unwindsett &unwindset,
   const unwind_strategyt unwind_strategy)
 {
-  Forall_goto_functions(it, goto_functions)
+  for(auto &gf_entry : goto_functions.function_map)
   {
-    goto_functionst::goto_functiont &goto_function=it->second;
+    goto_functionst::goto_functiont &goto_function = gf_entry.second;
 
     if(!goto_function.body_available())
       continue;
 
 #ifdef DEBUG
-    std::cout << "Function: " << it->first << '\n';
+    std::cout << "Function: " << gf_entry.first << '\n';
 #endif
 
     goto_programt &goto_program=goto_function.body;
 
-    unwind(it->first, goto_program, unwindset, unwind_strategy);
+    unwind(gf_entry.first, goto_program, unwindset, unwind_strategy);
   }
 }
 

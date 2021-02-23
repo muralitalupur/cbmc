@@ -76,9 +76,11 @@ bool write_goto_binary(
   // now write functions, but only those with body
 
   unsigned cnt=0;
-  forall_goto_functions(it, goto_functions)
-    if(it->second.body_available())
+  for(const auto &gf_entry : goto_functions.function_map)
+  {
+    if(gf_entry.second.body_available())
       cnt++;
+  }
 
   write_gb_word(out, cnt);
 
@@ -92,10 +94,8 @@ bool write_goto_binary(
       write_gb_string(out, id2string(fct.first)); // name
       write_gb_word(out, fct.second.body.instructions.size()); // # instructions
 
-      forall_goto_program_instructions(i_it, fct.second.body)
+      for(const auto &instruction : fct.second.body.instructions)
       {
-        const goto_programt::instructiont &instruction = *i_it;
-
         irepconverter.reference_convert(instruction.code, out);
         irepconverter.reference_convert(instruction.source_location, out);
         write_gb_word(out, (long)instruction.type);

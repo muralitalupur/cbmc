@@ -17,19 +17,6 @@ Author: Romain Brenguier, romain.brenguier@diffblue.com
 
 #include "goto_symex_state.h"
 
-void get_variables(
-  const symex_renaming_levelt &current_names,
-  std::unordered_set<ssa_exprt, irep_hash> &vars)
-{
-  symex_renaming_levelt::viewt view;
-  current_names.get_view(view);
-
-  for(const auto &pair : view)
-  {
-    vars.insert(pair.second.first);
-  }
-}
-
 renamedt<ssa_exprt, L0>
 symex_level0(ssa_exprt ssa_expr, const namespacet &ns, std::size_t thread_nr)
 {
@@ -170,7 +157,7 @@ exprt get_original_name(exprt expr)
 {
   expr.type() = get_original_name(std::move(expr.type()));
 
-  if(expr.id() == ID_symbol && expr.get_bool(ID_C_SSA_symbol))
+  if(is_ssa_expr(expr))
     return to_ssa_expr(expr).get_original_expr();
   else
   {
@@ -275,6 +262,10 @@ bool check_renaming(const exprt &expr)
       return true;
     if(to_ssa_expr(expr).get_original_expr().type() != type)
       return true;
+  }
+  else if(expr.id() == ID_nil)
+  {
+    return expr != nil_exprt{};
   }
   else
   {

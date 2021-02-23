@@ -11,12 +11,12 @@ Author: Daniel Kroening, kroening@kroening.com
 
 #include "value_set_fi.h"
 
-#include <cassert>
 #include <iterator>
 #include <ostream>
 
 #include <util/arith_tools.h>
 #include <util/byte_operators.h>
+#include <util/pointer_expr.h>
 #include <util/prefix.h>
 #include <util/simplify_expr.h>
 #include <util/std_code.h>
@@ -29,19 +29,9 @@ Author: Daniel Kroening, kroening@kroening.com
 const value_set_fit::object_map_dt value_set_fit::object_map_dt::blank{};
 
 object_numberingt value_set_fit::object_numbering;
-hash_numbering<irep_idt, irep_id_hash> value_set_fit::function_numbering;
+numberingt<irep_idt> value_set_fit::function_numbering;
 
 static const char *alloc_adapter_prefix="alloc_adaptor::";
-
-#define forall_objects(it, map) \
-  for(object_map_dt::const_iterator it = (map).begin(); \
-  it!=(map).end(); \
-  (it)++)
-
-#define Forall_objects(it, map) \
-  for(object_map_dt::iterator it = (map).begin(); \
-  it!=(map).end(); \
-  (it)++)
 
 void value_set_fit::output(
   const namespacet &ns,
@@ -82,7 +72,10 @@ void value_set_fit::output(
 
     std::size_t width=0;
 
-    forall_objects(o_it, object_map.read())
+    const auto &entries = object_map.read();
+    for(object_map_dt::const_iterator o_it = entries.begin();
+        o_it != entries.end();
+        ++o_it)
     {
       const exprt &o=object_numbering[o_it->first];
 
@@ -125,7 +118,7 @@ void value_set_fit::output(
       object_map_dt::const_iterator next(o_it);
       next++;
 
-      if(next!=object_map.read().end())
+      if(next != entries.end())
       {
         out << ", ";
         if(width>=40)
@@ -169,9 +162,9 @@ void value_set_fit::flatten_rec(
 
   seen.insert(identifier + e.suffix);
 
-  forall_objects(it, e.object_map.read())
+  for(const auto &object_entry : e.object_map.read())
   {
-    const exprt &o=object_numbering[it->first];
+    const exprt &o = object_numbering[object_entry.first];
 
     if(o.type().id()=="#REF#")
     {
@@ -197,26 +190,26 @@ void value_set_fit::flatten_rec(
             t_it!=temp.write().end();
             t_it++)
         {
-          if(t_it->second && it->second)
+          if(t_it->second && object_entry.second)
           {
-            *t_it->second += *it->second;
+            *t_it->second += *object_entry.second;
           }
           else
             t_it->second.reset();
         }
 
-        forall_objects(oit, temp.read())
-          insert(dest, *oit);
+        for(const auto &object_entry : temp.read())
+          insert(dest, object_entry);
       }
     }
     else
-      insert(dest, *it);
+      insert(dest, object_entry);
   }
 
   if(generalize_index) // this means we had recursive symbols in there
   {
-    Forall_objects(it, dest.write())
-      it->second.reset();
+    for(auto &object_entry : dest.write())
+      object_entry.second.reset();
   }
 
   seen.erase(identifier + e.suffix);
@@ -285,25 +278,13 @@ bool value_set_fit::make_union(object_mapt &dest, const object_mapt &src) const
 {
   bool result=false;
 
-  forall_objects(it, src.read())
+  for(const auto &object_entry : src.read())
   {
-    if(insert(dest, *it))
+    if(insert(dest, object_entry))
       result=true;
   }
 
   return result;
-}
-
-void value_set_fit::get_value_set(
-  const exprt &expr,
-  std::list<exprt> &value_set,
-  const namespacet &ns) const
-{
-  std::vector<exprt> result_as_vector = get_value_set(expr, ns);
-  std::move(
-    result_as_vector.begin(),
-    result_as_vector.end(),
-    std::back_inserter(value_set));
 }
 
 std::vector<exprt>
@@ -314,9 +295,9 @@ value_set_fit::get_value_set(const exprt &expr, const namespacet &ns) const
 
   object_mapt flat_map;
 
-  forall_objects(it, object_map.read())
+  for(const auto &object_entry : object_map.read())
   {
-    const exprt &object=object_numbering[it->first];
+    const exprt &object = object_numbering[object_entry.first];
     if(object.type().id()=="#REF#")
     {
       assert(object.id()==ID_symbol);
@@ -333,9 +314,9 @@ value_set_fit::get_value_set(const exprt &expr, const namespacet &ns) const
             t_it!=temp.write().end();
             t_it++)
         {
-          if(t_it->second && it->second)
+          if(t_it->second && object_entry.second)
           {
-            *t_it->second += *it->second;
+            *t_it->second += *object_entry.second;
           }
           else
             t_it->second.reset();
@@ -345,12 +326,12 @@ value_set_fit::get_value_set(const exprt &expr, const namespacet &ns) const
       }
     }
     else
-      flat_map.write()[it->first]=it->second;
+      flat_map.write()[object_entry.first] = object_entry.second;
   }
 
   std::vector<exprt> result;
-  forall_objects(fit, flat_map.read())
-    result.push_back(to_expr(*fit));
+  for(const auto &object_entry : flat_map.read())
+    result.push_back(to_expr(object_entry));
 
 #if 0
   // Sanity check!
@@ -401,9 +382,16 @@ void value_set_fit::get_value_set_rec(
 
     if(fi!=values.end())
     {
-      forall_objects(it, fi->second.object_map.read())
-        get_value_set_rec(object_numbering[it->first], dest, suffix,
-                          original_type, ns, recursion_set);
+      for(const auto &object_entry : fi->second.object_map.read())
+      {
+        get_value_set_rec(
+          object_numbering[object_entry.first],
+          dest,
+          suffix,
+          original_type,
+          ns,
+          recursion_set);
+      }
       return;
     }
     else
@@ -515,9 +503,9 @@ void value_set_fit::get_value_set_rec(
 
     if(object_map.begin()!=object_map.end())
     {
-      forall_objects(it1, object_map)
+      for(const auto &object_entry : object_map)
       {
-        const exprt &object=object_numbering[it1->first];
+        const exprt &object = object_numbering[object_entry.first];
         get_value_set_rec(object, dest, suffix,
                           original_type, ns, recursion_set);
       }
@@ -573,9 +561,9 @@ void value_set_fit::get_value_set_rec(
       get_value_set_rec(*ptr_operand, pointer_expr_set, "",
                         ptr_operand->type(), ns, recursion_set);
 
-      forall_objects(it, pointer_expr_set.read())
+      for(const auto &object_entry : pointer_expr_set.read())
       {
-        offsett offset = it->second;
+        offsett offset = object_entry.second;
 
         if(offset_is_zero(offset) && expr.operands().size() == 2)
         {
@@ -599,7 +587,7 @@ void value_set_fit::get_value_set_rec(
         else
           offset.reset();
 
-        insert(dest, it->first, offset);
+        insert(dest, object_entry.first, offset);
       }
 
       return;
@@ -712,9 +700,9 @@ void value_set_fit::get_reference_set(
   object_mapt object_map;
   get_reference_set_sharing(expr, object_map, ns);
 
-  forall_objects(it, object_map.read())
+  for(const auto &object_entry : object_map.read())
   {
-    const exprt &object = object_numbering[it->first];
+    const exprt &object = object_numbering[object_entry.first];
 
     if(object.type().id() == "#REF#")
     {
@@ -735,9 +723,9 @@ void value_set_fit::get_reference_set(
             t_it!=omt.write().end();
             t_it++)
         {
-          if(t_it->second && it->second)
+          if(t_it->second && object_entry.second)
           {
-            *t_it->second += *it->second;
+            *t_it->second += *object_entry.second;
           }
           else
             t_it->second.reset();
@@ -748,7 +736,7 @@ void value_set_fit::get_reference_set(
       }
     }
     else
-      dest.insert(to_expr(*it));
+      dest.insert(to_expr(object_entry));
   }
 }
 
@@ -760,8 +748,8 @@ void value_set_fit::get_reference_set_sharing(
   object_mapt object_map;
   get_reference_set_sharing(expr, object_map, ns);
 
-  forall_objects(it, object_map.read())
-    dest.insert(to_expr(*it));
+  for(const auto &object_entry : object_map.read())
+    dest.insert(to_expr(object_entry));
 }
 
 void value_set_fit::get_reference_set_sharing_rec(
@@ -779,8 +767,11 @@ void value_set_fit::get_reference_set_sharing_rec(
     valuest::const_iterator fi = values.find(expr.get(ID_identifier));
     if(fi!=values.end())
     {
-      forall_objects(it, fi->second.object_map.read())
-        get_reference_set_sharing_rec(object_numbering[it->first], dest, ns);
+      for(const auto &object_entry : fi->second.object_map.read())
+      {
+        get_reference_set_sharing_rec(
+          object_numbering[object_entry.first], dest, ns);
+      }
       return;
     }
   }
@@ -809,9 +800,9 @@ void value_set_fit::get_reference_set_sharing_rec(
       recset);
 
     // REF's need to be dereferenced manually!
-    forall_objects(it, temp.read())
+    for(const auto &object_entry : temp.read())
     {
-      const exprt &obj = object_numbering[it->first];
+      const exprt &obj = object_numbering[object_entry.first];
       if(obj.type().id()=="#REF#")
       {
         const irep_idt &ident = obj.get(ID_identifier);
@@ -826,22 +817,22 @@ void value_set_fit::get_reference_set_sharing_rec(
               t_it!=t2.write().end();
               t_it++)
           {
-            if(t_it->second && it->second)
+            if(t_it->second && object_entry.second)
             {
-              *t_it->second += *it->second;
+              *t_it->second += *object_entry.second;
             }
             else
               t_it->second.reset();
           }
 
-          forall_objects(it2, t2.read())
-            insert(dest, *it2);
+          for(const auto &t2_object_entry : t2.read())
+            insert(dest, t2_object_entry);
         }
         else
           insert(dest, exprt(ID_unknown, obj.type().subtype()));
       }
       else
-        insert(dest, *it);
+        insert(dest, object_entry);
     }
 
     #if 0
@@ -867,9 +858,9 @@ void value_set_fit::get_reference_set_sharing_rec(
 
     const object_map_dt &object_map=array_references.read();
 
-    forall_objects(a_it, object_map)
+    for(const auto &object_entry : object_map)
     {
-      const exprt &object=object_numbering[a_it->first];
+      const exprt &object = object_numbering[object_entry.first];
 
       if(object.id()==ID_unknown)
         insert(dest, exprt(ID_unknown, expr.type()));
@@ -886,7 +877,7 @@ void value_set_fit::get_reference_set_sharing_rec(
         else
           casted_index = index_expr;
 
-        offsett o = a_it->second;
+        offsett o = object_entry.second;
         const auto i = numeric_cast<mp_integer>(offset);
 
         if(offset.is_zero())
@@ -912,9 +903,9 @@ void value_set_fit::get_reference_set_sharing_rec(
     object_mapt struct_references;
     get_reference_set_sharing(struct_op, struct_references, ns);
 
-    forall_objects(it, struct_references.read())
+    for(const auto &object_entry : struct_references.read())
     {
-      const exprt &object=object_numbering[it->first];
+      const exprt &object = object_numbering[object_entry.first];
       const typet &obj_type = object.type();
 
       if(object.id()==ID_unknown)
@@ -930,7 +921,7 @@ void value_set_fit::get_reference_set_sharing_rec(
       }
       else
       {
-        offsett o = it->second;
+        offsett o = object_entry.second;
 
         member_exprt member_expr(object, component_name, expr.type());
 
@@ -1140,10 +1131,13 @@ void value_set_fit::assign_rec(
     {
       recursion_set.insert(ident);
 
-      forall_objects(it, temp.read())
-        if(object_numbering[it->first].id()!=ID_unknown)
-          assign_rec(object_numbering[it->first], values_rhs,
-                     suffix, ns, recursion_set);
+      for(const auto &object_entry : temp.read())
+      {
+        const exprt &object = object_numbering[object_entry.first];
+
+        if(object.id() != ID_unknown)
+          assign_rec(object, values_rhs, suffix, ns, recursion_set);
+      }
 
       recursion_set.erase(ident);
     }
@@ -1185,9 +1179,9 @@ void value_set_fit::assign_rec(
     object_mapt reference_set;
     get_reference_set_sharing(lhs, reference_set, ns);
 
-    forall_objects(it, reference_set.read())
+    for(const auto &object_entry : reference_set.read())
     {
-      const exprt &object=object_numbering[it->first];
+      const exprt &object = object_numbering[object_entry.first];
 
       if(object.id()!=ID_unknown)
         assign_rec(object, values_rhs, suffix, ns, recursion_set);

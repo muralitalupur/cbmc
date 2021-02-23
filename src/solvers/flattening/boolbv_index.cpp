@@ -12,6 +12,7 @@ Author: Daniel Kroening, kroening@kroening.com
 
 #include <util/arith_tools.h>
 #include <util/cprover_prefix.h>
+#include <util/pointer_expr.h>
 #include <util/pointer_offset_size.h>
 #include <util/simplify_expr.h>
 #include <util/std_expr.h>
@@ -55,7 +56,9 @@ bvt boolbvt::convert_index(const index_exprt &expr)
         if(
           final_array.id() == ID_symbol || final_array.id() == ID_nondet_symbol)
         {
-          map.get_map_entry(final_array.get(ID_identifier), array_type);
+          std::size_t width = boolbv_width(array_type);
+          (void)map.get_literals(
+            final_array.get(ID_identifier), array_type, width);
         }
 
         // make sure we have the index in the cache
@@ -72,7 +75,10 @@ bvt boolbvt::convert_index(const index_exprt &expr)
 
         // record type if array is a symbol
         if(array.id() == ID_symbol || array.id() == ID_nondet_symbol)
-          map.get_map_entry(array.get(ID_identifier), array_type);
+        {
+          std::size_t width = boolbv_width(array_type);
+          (void)map.get_literals(array.get(ID_identifier), array_type, width);
+        }
 
         // make sure we have the index in the cache
         convert_bv(index);

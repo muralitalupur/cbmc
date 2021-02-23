@@ -24,9 +24,9 @@ static bool potential_race_on_read(
   const rw_set_baset &isr_rw_set)
 {
   // R/W race?
-  forall_rw_set_r_entries(e_it, code_rw_set)
+  for(const auto &r_entry : code_rw_set.r_entries)
   {
-    if(isr_rw_set.has_w_entry(e_it->first))
+    if(isr_rw_set.has_w_entry(r_entry.first))
       return true;
   }
 
@@ -38,12 +38,12 @@ static bool potential_race_on_write(
   const rw_set_baset &isr_rw_set)
 {
   // W/R or W/W?
-  forall_rw_set_w_entries(e_it, code_rw_set)
+  for(const auto &w_entry : code_rw_set.w_entries)
   {
-    if(isr_rw_set.has_r_entry(e_it->first))
+    if(isr_rw_set.has_r_entry(w_entry.first))
       return true;
 
-    if(isr_rw_set.has_w_entry(e_it->first))
+    if(isr_rw_set.has_w_entry(w_entry.first))
       return true;
   }
 
@@ -194,20 +194,25 @@ void interrupt(
 
   // now instrument
 
-  Forall_goto_functions(f_it, goto_model.goto_functions)
-    if(f_it->first != INITIALIZE_FUNCTION &&
-       f_it->first!=goto_functionst::entry_point() &&
-       f_it->first!=isr.get_identifier())
+  for(auto &gf_entry : goto_model.goto_functions.function_map)
+  {
+    if(
+      gf_entry.first != INITIALIZE_FUNCTION &&
+      gf_entry.first != goto_functionst::entry_point() &&
+      gf_entry.first != isr.get_identifier())
+    {
       interrupt(
         value_sets,
         goto_model.symbol_table,
-        f_it->first,
+        gf_entry.first,
 #ifdef LOCAL_MAY
-        f_it->second,
+        gf_entry.second,
 #endif
-        f_it->second.body,
+        gf_entry.second.body,
         isr,
         isr_rw_set);
+    }
+  }
 
   goto_model.goto_functions.update();
 }

@@ -92,7 +92,7 @@ void irept::set(const irep_namet &name, const long long value)
 
 void irept::remove(const irep_namet &name)
 {
-#ifdef NAMED_SUB_IS_FORWARD_LIST
+#if NAMED_SUB_IS_FORWARD_LIST
   return get_named_sub().remove(name);
 #else
   named_subt &s = get_named_sub();
@@ -120,7 +120,7 @@ irept &irept::add(const irep_namet &name, irept irep)
 {
   named_subt &s = get_named_sub();
 
-#ifdef NAMED_SUB_IS_FORWARD_LIST
+#if NAMED_SUB_IS_FORWARD_LIST
   return s.add(name, std::move(irep));
 #else
   std::pair<named_subt::iterator, bool> entry = s.emplace(
@@ -434,17 +434,20 @@ std::size_t irept::hash() const
 
   std::size_t result=hash_string(id());
 
-  forall_irep(it, sub) result=hash_combine(result, it->hash());
+  for(const auto &irep : sub)
+    result = hash_combine(result, irep.hash());
 
   std::size_t number_of_named_ireps = 0;
 
-  forall_named_irep(it, named_sub)
-    if(!is_comment(it->first)) // this variant ignores comments
+  for(const auto &irep_entry : named_sub)
+  {
+    if(!is_comment(irep_entry.first)) // this variant ignores comments
     {
-      result = hash_combine(result, hash_string(it->first));
-      result = hash_combine(result, it->second.hash());
+      result = hash_combine(result, hash_string(irep_entry.first));
+      result = hash_combine(result, irep_entry.second.hash());
       number_of_named_ireps++;
     }
+  }
 
   result = hash_finalize(result, sub.size() + number_of_named_ireps);
 
@@ -464,13 +467,14 @@ std::size_t irept::full_hash() const
 
   std::size_t result=hash_string(id());
 
-  forall_irep(it, sub) result=hash_combine(result, it->full_hash());
+  for(const auto &irep : sub)
+    result = hash_combine(result, irep.full_hash());
 
   // this variant includes all named_sub elements
-  forall_named_irep(it, named_sub)
+  for(const auto &irep_entry : named_sub)
   {
-    result=hash_combine(result, hash_string(it->first));
-    result=hash_combine(result, it->second.full_hash());
+    result = hash_combine(result, hash_string(irep_entry.first));
+    result = hash_combine(result, irep_entry.second.full_hash());
   }
 
   const std::size_t named_sub_size = named_sub.size();
@@ -498,21 +502,21 @@ std::string irept::pretty(unsigned indent, unsigned max_indent) const
     indent+=2;
   }
 
-  forall_named_irep(it, get_named_sub())
+  for(const auto &irep_entry : get_named_sub())
   {
     result+="\n";
     indent_str(result, indent);
 
     result+="* ";
-    result+=id2string(it->first);
+    result += id2string(irep_entry.first);
     result+=": ";
 
-    result+=it->second.pretty(indent+2, max_indent);
+    result += irep_entry.second.pretty(indent + 2, max_indent);
   }
 
   std::size_t count=0;
 
-  forall_irep(it, get_sub())
+  for(const auto &irep : get_sub())
   {
     result+="\n";
     indent_str(result, indent);
@@ -520,7 +524,7 @@ std::string irept::pretty(unsigned indent, unsigned max_indent) const
     result+=std::to_string(count++);
     result+=": ";
 
-    result+=it->pretty(indent+2, max_indent);
+    result += irep.pretty(indent + 2, max_indent);
   }
 
   return result;

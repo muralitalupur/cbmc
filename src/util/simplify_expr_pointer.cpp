@@ -8,19 +8,17 @@ Author: Daniel Kroening, kroening@kroening.com
 
 #include "simplify_expr_class.h"
 
-#include <cassert>
-
 #include "arith_tools.h"
 #include "c_types.h"
 #include "config.h"
 #include "expr_util.h"
 #include "namespace.h"
+#include "pointer_expr.h"
 #include "pointer_offset_size.h"
 #include "pointer_predicates.h"
 #include "prefix.h"
 #include "std_expr.h"
 #include "string_constant.h"
-#include "threeval.h"
 
 static bool is_dereference_integer_object(
   const exprt &expr,
@@ -658,56 +656,6 @@ simplify_exprt::simplify_is_invalid_pointer(const unary_exprt &expr)
     return unchanged(expr);
   else
     return std::move(new_expr);
-}
-
-tvt simplify_exprt::objects_equal(const exprt &a, const exprt &b)
-{
-  if(a==b)
-    return tvt(true);
-
-  if(a.id() == ID_address_of && b.id() == ID_address_of)
-  {
-    return objects_equal_address_of(
-      to_address_of_expr(a).object(), to_address_of_expr(b).object());
-  }
-
-  if(a.id()==ID_constant && b.id()==ID_constant &&
-     a.get(ID_value)==ID_NULL && b.get(ID_value)==ID_NULL)
-    return tvt(true);
-
-  if(a.id()==ID_constant && b.id()==ID_address_of &&
-     a.get(ID_value)==ID_NULL)
-    return tvt(false);
-
-  if(b.id()==ID_constant && a.id()==ID_address_of &&
-     b.get(ID_value)==ID_NULL)
-    return tvt(false);
-
-  return tvt::unknown();
-}
-
-tvt simplify_exprt::objects_equal_address_of(const exprt &a, const exprt &b)
-{
-  if(a==b)
-    return tvt(true);
-
-  if(a.id()==ID_symbol && b.id()==ID_symbol)
-  {
-    if(to_symbol_expr(a).get_identifier() == to_symbol_expr(b).get_identifier())
-      return tvt(true);
-  }
-  else if(a.id()==ID_index && b.id()==ID_index)
-  {
-    return objects_equal_address_of(
-      to_index_expr(a).array(), to_index_expr(b).array());
-  }
-  else if(a.id()==ID_member && b.id()==ID_member)
-  {
-    return objects_equal_address_of(
-      to_member_expr(a).compound(), to_member_expr(b).compound());
-  }
-
-  return tvt::unknown();
 }
 
 simplify_exprt::resultt<>

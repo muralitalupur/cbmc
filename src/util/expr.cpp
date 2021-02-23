@@ -35,51 +35,6 @@ std::size_t exprt::size() const
   return size;
 }
 
-/// Move the given argument to the end of `exprt`'s operands.
-/// The argument is destroyed and mutated to a reference to a nil `irept`.
-/// \param expr: `exprt` to append to the operands
-void exprt::move_to_operands(exprt &expr)
-{
-  operandst &op=operands();
-  op.push_back(static_cast<const exprt &>(get_nil_irep()));
-  op.back().swap(expr);
-}
-
-/// Move the given arguments to the end of `exprt`'s operands.
-/// The arguments are destroyed and mutated to a reference to a nil `irept`.
-/// \param e1: first `exprt` to append to the operands
-/// \param e2: second `exprt` to append to the operands
-void exprt::move_to_operands(exprt &e1, exprt &e2)
-{
-  operandst &op=operands();
-  #ifndef USE_LIST
-  op.reserve(op.size()+2);
-  #endif
-  op.push_back(static_cast<const exprt &>(get_nil_irep()));
-  op.back().swap(e1);
-  op.push_back(static_cast<const exprt &>(get_nil_irep()));
-  op.back().swap(e2);
-}
-
-/// Move the given arguments to the end of `exprt`'s operands.
-/// The arguments are destroyed and mutated to a reference to a nil `irept`.
-/// \param e1: first `exprt` to append to the operands
-/// \param e2: second `exprt` to append to the operands
-/// \param e3: third `exprt` to append to the operands
-void exprt::move_to_operands(exprt &e1, exprt &e2, exprt &e3)
-{
-  operandst &op=operands();
-  #ifndef USE_LIST
-  op.reserve(op.size()+3);
-  #endif
-  op.push_back(static_cast<const exprt &>(get_nil_irep()));
-  op.back().swap(e1);
-  op.push_back(static_cast<const exprt &>(get_nil_irep()));
-  op.back().swap(e2);
-  op.push_back(static_cast<const exprt &>(get_nil_irep()));
-  op.back().swap(e3);
-}
-
 /// Return whether the expression is a constant.
 /// \return True if is a constant, false otherwise
 bool exprt::is_constant() const
@@ -103,15 +58,6 @@ bool exprt::is_false() const
   return is_constant() &&
          type().id()==ID_bool &&
          get(ID_value)==ID_false;
-}
-
-/// Replace the expression by a Boolean expression representing \p value.
-/// \param value: the Boolean value to give to the expression
-/// \deprecated use constructors instead
-void exprt::make_bool(bool value)
-{
-  *this=exprt(ID_constant, typet(ID_bool));
-  set(ID_value, value?ID_true:ID_false);
 }
 
 /// Return whether the expression represents a Boolean.

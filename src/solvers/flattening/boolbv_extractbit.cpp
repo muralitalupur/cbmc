@@ -8,10 +8,10 @@ Author: Daniel Kroening, kroening@kroening.com
 
 #include "boolbv.h"
 
-#include <cassert>
 #include <algorithm>
 
 #include <util/arith_tools.h>
+#include <util/bitvector_expr.h>
 #include <util/exception_utils.h>
 #include <util/std_expr.h>
 #include <util/std_types.h>

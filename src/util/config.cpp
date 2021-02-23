@@ -15,8 +15,8 @@ Author: Daniel Kroening, kroening@kroening.com
 #include "cprover_prefix.h"
 #include "exception_utils.h"
 #include "namespace.h"
+#include "pointer_expr.h"
 #include "simplify_expr.h"
-#include "std_expr.h"
 #include "string2int.h"
 #include "string_utils.h"
 #include "symbol_table.h"
@@ -998,6 +998,13 @@ bool configt::set(const cmdlinet &cmdline)
     else
       ansi_c.long_double_width=8*8;
   }
+  else if(os == "macos" && arch == "arm64")
+  {
+    // https://developer.apple.com/documentation/xcode/
+    // writing_arm64_code_for_apple_platforms#//apple_ref/doc/uid/TP40013702-SW1
+    ansi_c.char_is_unsigned = false;
+    ansi_c.long_double_width = 8 * 8;
+  }
 
   // Let's check some of the type widths in case we run
   // the same architecture and OS that we are verifying for.
@@ -1252,8 +1259,7 @@ void configt::set_from_symbol_table(
   else
     ansi_c.os=ansi_ct::string_to_os(id2string(string_from_ns(ns, "os")));
 
-  // NULL_is_zero=from_ns("NULL_is_zero");
-  ansi_c.NULL_is_zero=true;
+  ansi_c.NULL_is_zero = unsigned_from_ns(ns, "NULL_is_zero") != 0;
 
   // mode, preprocessor (and all preprocessor command line options),
   // lib, string_abstraction not stored in namespace

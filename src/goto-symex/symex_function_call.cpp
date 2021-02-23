@@ -42,8 +42,6 @@ void goto_symext::parameter_assignments(
   statet &state,
   const exprt::operandst &arguments)
 {
-  const code_typet &function_type=goto_function.type;
-
   // iterates over the arguments
   exprt::operandst::const_iterator it1=arguments.begin();
 
@@ -151,7 +149,7 @@ void goto_symext::parameter_assignments(
       it1++;
   }
 
-  if(function_type.has_ellipsis())
+  if(to_code_type(ns.lookup(function_identifier).type).has_ellipsis())
   {
     // These are va_arg arguments; their types may differ from call to call
     for(; it1 != arguments.end(); it1++)
@@ -202,8 +200,8 @@ void goto_symext::symex_function_call_symbol(
 
   code.function() = clean_expr(std::move(code.function()), state, false);
 
-  Forall_expr(it, code.arguments())
-    *it = clean_expr(std::move(*it), state, false);
+  for(auto &argument : code.arguments())
+    argument = clean_expr(std::move(argument), state, false);
 
   target.location(state.guard.as_expr(), state.source);
 
@@ -270,9 +268,8 @@ void goto_symext::symex_function_call_code(
       [&](const exprt &a) { return state.rename(a, ns); });
 
   // we hide the call if the caller and callee are both hidden
-  const bool callee_is_hidden = ns.lookup(identifier).is_hidden();
   const bool hidden =
-    state.call_stack().top().hidden_function && callee_is_hidden;
+    state.call_stack().top().hidden_function && goto_function.is_hidden();
 
   // record the call
   target.function_call(
@@ -338,7 +335,7 @@ void goto_symext::symex_function_call_code(
   frame.end_of_function=--goto_function.body.instructions.end();
   frame.return_value=call.lhs();
   frame.function_identifier=identifier;
-  frame.hidden_function = callee_is_hidden;
+  frame.hidden_function = goto_function.is_hidden();
 
   const framet &p_frame = state.call_stack().previous_frame();
   for(const auto &pair : p_frame.loop_iterations)
@@ -363,57 +360,42 @@ static void pop_frame(
 {
   PRECONDITION(!state.call_stack().empty());
 
+  const framet &frame = state.call_stack().top();
+
+  // restore program counter
+  symex_transition(state, frame.calling_location.pc, false);
+  state.source.function_id = frame.calling_location.function_id;
+
+  // restore L1 renaming
+  state.level1.restore_from(frame.old_level1);
+
+  // If the program is multi-threaded then the state guard is used to
+  // accumulate assumptions (in symex_assume_l2) and must be left alone.
+  // If however it is single-threaded then we should restore the guard, as the
+  // guard coming out of the function may be more complex (e.g. if the callee
+  // was { if(x) while(true) { } } then the guard may still be `!x`),
+  // but at this point all control-flow paths have either converged or been
+  // proven unviable, so we can stop specifying the callee's constraints when
+  // we generate an assumption or VCC.
+
+  // If we're doing path exploration then we do tail-duplication, and we
+  // actually *are* in a more-restricted context than we were when the
+  // function began.
+  if(state.threads.size() == 1 && !doing_path_exploration)
   {
-    const framet &frame = state.call_stack().top();
+    state.guard = frame.guard_at_function_start;
+  }
 
-    // restore program counter
-    symex_transition(state, frame.calling_location.pc, false);
-    state.source.function_id = frame.calling_location.function_id;
+  for(const irep_idt &l1_o_id : frame.local_objects)
+  {
+    const auto l2_entry_opt = state.get_level2().current_names.find(l1_o_id);
 
-    // restore L1 renaming
-    state.level1.restore_from(frame.old_level1);
-
-    // If the program is multi-threaded then the state guard is used to
-    // accumulate assumptions (in symex_assume_l2) and must be left alone.
-    // If however it is single-threaded then we should restore the guard, as the
-    // guard coming out of the function may be more complex (e.g. if the callee
-    // was { if(x) while(true) { } } then the guard may still be `!x`),
-    // but at this point all control-flow paths have either converged or been
-    // proven unviable, so we can stop specifying the callee's constraints when
-    // we generate an assumption or VCC.
-
-    // If we're doing path exploration then we do tail-duplication, and we
-    // actually *are* in a more-restricted context than we were when the
-    // function began.
-    if(state.threads.size() == 1 && !doing_path_exploration)
+    if(
+      l2_entry_opt.has_value() &&
+      (state.threads.size() == 1 ||
+       !path_storage.dirty(l2_entry_opt->get().first.get_object_name())))
     {
-      state.guard = frame.guard_at_function_start;
-    }
-
-    symex_renaming_levelt::viewt view;
-    state.get_level2().current_names.get_view(view);
-
-    std::vector<irep_idt> keys_to_erase;
-
-    for(const auto &pair : view)
-    {
-      const irep_idt l1_o_id = pair.second.first.get_l1_object_identifier();
-
-      // could use iteration over local_objects as l1_o_id is prefix
-      if(
-        frame.local_objects.find(l1_o_id) == frame.local_objects.end() ||
-        (state.threads.size() > 1 &&
-         path_storage.dirty(pair.second.first.get_object_name())))
-      {
-        continue;
-      }
-
-      keys_to_erase.push_back(pair.first);
-    }
-
-    for(const irep_idt &key : keys_to_erase)
-    {
-      state.drop_existing_l1_name(key);
+      state.drop_existing_l1_name(l1_o_id);
     }
   }
 

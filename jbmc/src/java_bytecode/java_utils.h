@@ -16,13 +16,11 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <util/message.h>
 #include <util/nodiscard.h>
 #include <util/optional.h>
+#include <util/pointer_expr.h>
 #include <util/std_expr.h>
 #include <util/symbol_table.h>
 
 #include <goto-programs/resolve_inherited_component.h>
-
-DEPRECATED(SINCE(2019, 6, 10, "use is_java_array_type instead"))
-bool java_is_array_type(const typet &type);
 
 /// Returns true iff the argument represents a string type (CharSequence,
 /// StringBuilder, StringBuffer or String).

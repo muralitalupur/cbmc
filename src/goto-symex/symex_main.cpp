@@ -47,6 +47,7 @@ symex_configt::symex_configt(const optionst &options)
     debug_level(unsafe_string2int(options.get_option("debug-level"))),
     run_validation_checks(options.get_bool_option("validate-ssa-equation")),
     show_symex_steps(options.get_bool_option("show-goto-symex-steps")),
+    show_points_to_sets(options.get_bool_option("show-points-to-sets")),
     max_field_sensitivity_array_size(
       options.is_set("no-array-field-sensitivity")
         ? 0
@@ -434,8 +435,7 @@ std::unique_ptr<goto_symext::statet> goto_symext::initialize_entry_point_state(
   state->call_stack().top().end_of_function = limit;
   state->call_stack().top().calling_location.pc =
     state->call_stack().top().end_of_function;
-  state->call_stack().top().hidden_function =
-    ns.lookup(entry_point_id).is_hidden();
+  state->call_stack().top().hidden_function = start_function->is_hidden();
 
   state->symex_target = &target;
 

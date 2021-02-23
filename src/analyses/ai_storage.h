@@ -23,6 +23,8 @@ Author: Martin Brain, martin.brain@cs.ox.ac.uk
 #ifndef CPROVER_ANALYSES_AI_STORAGE_H
 #define CPROVER_ANALYSES_AI_STORAGE_H
 
+#include <util/deprecate.h>
+
 #include <goto-programs/goto_program.h>
 
 #include "ai_domain.h"
@@ -144,6 +146,7 @@ public:
 // A couple of older domains make direct use of the state map
 class invariant_propagationt;
 class dependence_grapht;
+class variable_sensitivity_dependence_grapht;
 
 /// The most conventional storage; one domain per location
 class location_sensitive_storaget : public trace_map_storaget
@@ -161,6 +164,7 @@ protected:
   // Support some older domains that explicitly iterate across the state map
   friend invariant_propagationt;
   friend dependence_grapht;
+  friend variable_sensitivity_dependence_grapht; // Based on dependence_grapht
   state_mapt &internal(void)
   {
     return state_map;

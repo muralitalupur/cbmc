@@ -13,7 +13,6 @@ Author: Daniel Kroening, kroening@kroening.com
 
 #ifdef DEBUG
 #include <iostream>
-#include <util/format_expr.h>
 #endif
 
 #include <util/arith_tools.h>
@@ -24,14 +23,19 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <util/cprover_prefix.h>
 #include <util/expr_iterator.h>
 #include <util/expr_util.h>
+#include <util/format_expr.h>
 #include <util/format_type.h>
 #include <util/fresh_symbol.h>
+#include <util/json_irep.h>
 #include <util/options.h>
+#include <util/pointer_expr.h>
 #include <util/pointer_offset_size.h>
 #include <util/pointer_predicates.h>
 #include <util/range.h>
 #include <util/simplify_expr.h>
 #include <util/ssa_expr.h>
+
+#include <deque>
 
 /// Returns true if \p expr is complicated enough that a local definition (using
 /// a let expression) is preferable to repeating it, potentially many times.
@@ -60,7 +64,75 @@ static bool should_use_local_definition_for(const exprt &expr)
   return false;
 }
 
-exprt value_set_dereferencet::dereference(const exprt &pointer)
+static json_objectt value_set_dereference_stats_to_json(
+  const exprt &pointer,
+  const std::vector<exprt> &points_to_set,
+  const std::vector<exprt> &retained_values,
+  const exprt &value)
+{
+  json_objectt json_result;
+  json_result["Pointer"] = json_stringt{format_to_string(pointer)};
+  json_result["PointsToSetSize"] =
+    json_numbert{std::to_string(points_to_set.size())};
+
+  json_arrayt points_to_set_json;
+  for(const auto &object : points_to_set)
+  {
+    points_to_set_json.push_back(json_stringt{format_to_string(object)});
+  }
+
+  json_result["PointsToSet"] = points_to_set_json;
+
+  json_result["RetainedValuesSetSize"] =
+    json_numbert{std::to_string(points_to_set.size())};
+
+  json_arrayt retained_values_set_json;
+  for(auto &retained_value : retained_values)
+  {
+    retained_values_set_json.push_back(
+      json_stringt{format_to_string(retained_value)});
+  }
+
+  json_result["RetainedValuesSet"] = retained_values_set_json;
+
+  json_result["Value"] = json_stringt{format_to_string(value)};
+
+  return json_result;
+}
+
+optionalt<exprt> value_set_dereferencet::try_add_offset_to_indices(
+  const exprt &expr,
+  const exprt &offset_elements)
+{
+  if(const auto *index_expr = expr_try_dynamic_cast<index_exprt>(expr))
+  {
+    return index_exprt{
+      index_expr->array(),
+      plus_exprt{index_expr->index(),
+                 typecast_exprt::conditional_cast(
+                   offset_elements, index_expr->index().type())}};
+  }
+  else if(const auto *if_expr = expr_try_dynamic_cast<if_exprt>(expr))
+  {
+    const auto true_case =
+      try_add_offset_to_indices(if_expr->true_case(), offset_elements);
+    if(!true_case)
+      return {};
+    const auto false_case =
+      try_add_offset_to_indices(if_expr->false_case(), offset_elements);
+    if(!false_case)
+      return {};
+    return if_exprt{if_expr->cond(), *true_case, *false_case};
+  }
+  else
+  {
+    return {};
+  }
+}
+
+exprt value_set_dereferencet::dereference(
+  const exprt &pointer,
+  bool display_points_to_sets)
 {
   if(pointer.type().id()!=ID_pointer)
     throw "dereference expected pointer type, but got "+
@@ -70,8 +142,9 @@ exprt value_set_dereferencet::dereference(const exprt &pointer)
   if(pointer.id()==ID_if)
   {
     const if_exprt &if_expr=to_if_expr(pointer);
-    exprt true_case = dereference(if_expr.true_case());
-    exprt false_case = dereference(if_expr.false_case());
+    exprt true_case = dereference(if_expr.true_case(), display_points_to_sets);
+    exprt false_case =
+      dereference(if_expr.false_case(), display_points_to_sets);
     return if_exprt(if_expr.cond(), true_case, false_case);
   }
   else if(pointer.id() == ID_typecast)
@@ -90,29 +163,54 @@ exprt value_set_dereferencet::dereference(const exprt &pointer)
       const auto &if_expr = to_if_expr(*underlying);
       return if_exprt(
         if_expr.cond(),
-        dereference(typecast_exprt(if_expr.true_case(), pointer.type())),
-        dereference(typecast_exprt(if_expr.false_case(), pointer.type())));
+        dereference(
+          typecast_exprt(if_expr.true_case(), pointer.type()),
+          display_points_to_sets),
+        dereference(
+          typecast_exprt(if_expr.false_case(), pointer.type()),
+          display_points_to_sets));
+    }
+  }
+  else if(pointer.id() == ID_plus && pointer.operands().size() == 2)
+  {
+    // Try to improve results for *(p + i) where p points to known offsets but
+    // i is non-constant-- if `p` points to known positions in arrays or array-members
+    // of structs then we can add the non-constant expression `i` to the index
+    // instead of using a byte-extract expression.
+
+    exprt pointer_expr = to_plus_expr(pointer).op0();
+    exprt offset_expr = to_plus_expr(pointer).op1();
+
+    if(can_cast_type<pointer_typet>(offset_expr.type()))
+      std::swap(pointer_expr, offset_expr);
+
+    if(
+      can_cast_type<pointer_typet>(pointer_expr.type()) &&
+      !can_cast_type<pointer_typet>(offset_expr.type()) &&
+      !can_cast_expr<constant_exprt>(offset_expr))
+    {
+      exprt derefd_pointer = dereference(pointer_expr);
+      if(
+        auto derefd_with_offset =
+          try_add_offset_to_indices(derefd_pointer, offset_expr))
+        return *derefd_with_offset;
+
+      // If any of this fails, fall through to use the normal byte-extract path.
     }
   }
 
-  // type of the object
-  const typet &type=pointer.type().subtype();
+  return handle_dereference_base_case(pointer, display_points_to_sets);
+}
 
-#ifdef DEBUG
-  std::cout << "value_set_dereferencet::dereference pointer=" << format(pointer)
-            << '\n';
-#endif
+exprt value_set_dereferencet::handle_dereference_base_case(
+  const exprt &pointer,
+  bool display_points_to_sets)
+{ // type of the object
+  const typet &type=pointer.type().subtype();
 
   // collect objects the pointer may point to
   const std::vector<exprt> points_to_set =
     dereference_callback.get_value_set(pointer);
-
-#ifdef DEBUG
-  std::cout << "value_set_dereferencet::dereference points_to_set={";
-  for(auto p : points_to_set)
-    std::cout << format(p) << "; ";
-  std::cout << "}\n" << std::flush;
-#endif
 
   // get the values of these
   const std::vector<exprt> retained_values =
@@ -135,102 +233,89 @@ exprt value_set_dereferencet::dereference(const exprt &pointer)
     compare_against_pointer = fresh_binder.symbol_expr();
   }
 
-#ifdef DEBUG
-  std::cout << "value_set_dereferencet::dereference retained_values={";
-  for(const auto &value : retained_values)
-    std::cout << format(value) << "; ";
-  std::cout << "}\n" << std::flush;
-#endif
+  auto values =
+    make_range(retained_values)
+      .map([&](const exprt &value) {
+        return build_reference_to(value, compare_against_pointer, ns);
+      })
+      .collect<std::deque<valuet>>();
 
-  std::list<valuet> values =
-    make_range(retained_values).map([&](const exprt &value) {
-      return build_reference_to(value, compare_against_pointer, ns);
+  const bool may_fail =
+    values.empty() ||
+    std::any_of(values.begin(), values.end(), [](const valuet &value) {
+      return value.value.is_nil();
     });
-
-  // can this fail?
-  bool may_fail;
-
-  if(values.empty())
-  {
-    may_fail=true;
-  }
-  else
-  {
-    may_fail=false;
-    for(std::list<valuet>::const_iterator
-        it=values.begin();
-        it!=values.end();
-        it++)
-      if(it->value.is_nil())
-        may_fail=true;
-  }
 
   if(may_fail)
   {
-    // first see if we have a "failed object" for this pointer
-
-    exprt failure_value;
-
-    if(
-      const symbolt *failed_symbol =
-        dereference_callback.get_or_create_failed_symbol(pointer))
-    {
-      // yes!
-      failure_value=failed_symbol->symbol_expr();
-      failure_value.set(ID_C_invalid_object, true);
-    }
-    else
-    {
-      // else: produce new symbol
-      symbolt &symbol = get_fresh_aux_symbol(
-        type,
-        "symex",
-        "invalid_object",
-        pointer.source_location(),
-        language_mode,
-        new_symbol_table);
-
-      // make it a lvalue, so we can assign to it
-      symbol.is_lvalue=true;
-
-      failure_value=symbol.symbol_expr();
-      failure_value.set(ID_C_invalid_object, true);
-    }
-
-    valuet value;
-    value.value=failure_value;
-    value.pointer_guard=true_exprt();
-    values.push_front(value);
+    values.push_front(get_failure_value(pointer, type));
   }
 
   // now build big case split, but we only do "good" objects
 
-  exprt value=nil_exprt();
+  exprt result_value = nil_exprt{};
 
-  for(std::list<valuet>::const_iterator
-      it=values.begin();
-      it!=values.end();
-      it++)
+  for(const auto &value : values)
   {
-    if(it->value.is_not_nil())
+    if(value.value.is_not_nil())
     {
-      if(value.is_nil()) // first?
-        value=it->value;
+      if(result_value.is_nil()) // first?
+        result_value = value.value;
       else
-        value=if_exprt(it->pointer_guard, it->value, value);
+        result_value = if_exprt(value.pointer_guard, value.value, result_value);
     }
   }
 
   if(compare_against_pointer != pointer)
-    value = let_exprt(to_symbol_expr(compare_against_pointer), pointer, value);
+    result_value =
+      let_exprt(to_symbol_expr(compare_against_pointer), pointer, result_value);
 
-#ifdef DEBUG
-  std::cout << "value_set_derefencet::dereference value=" << format(value)
-            << '\n'
-            << std::flush;
-#endif
+  if(display_points_to_sets)
+  {
+    log.status() << value_set_dereference_stats_to_json(
+      pointer, points_to_set, retained_values, result_value);
+  }
 
-  return value;
+  return result_value;
+}
+
+value_set_dereferencet::valuet value_set_dereferencet::get_failure_value(
+  const exprt &pointer,
+  const typet &type)
+{
+  // first see if we have a "failed object" for this pointer
+  exprt failure_value;
+
+  if(
+    const symbolt *failed_symbol =
+      dereference_callback.get_or_create_failed_symbol(pointer))
+  {
+    // yes!
+    failure_value = failed_symbol->symbol_expr();
+    failure_value.set(ID_C_invalid_object, true);
+  }
+  else
+  {
+    // else: produce new symbol
+    symbolt &symbol = get_fresh_aux_symbol(
+      type,
+      "symex",
+      "invalid_object",
+      pointer.source_location(),
+      language_mode,
+      new_symbol_table);
+
+    // make it a lvalue, so we can assign to it
+    symbol.is_lvalue = true;
+
+    failure_value = symbol.symbol_expr();
+    failure_value.set(ID_C_invalid_object, true);
+  }
+
+  valuet result{};
+  result.value = failure_value;
+  result.pointer_guard = true_exprt();
+  return result;
 }
 
 /// Check if the two types have matching number of ID_pointer levels, with

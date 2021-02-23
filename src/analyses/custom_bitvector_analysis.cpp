@@ -12,6 +12,7 @@ Author: Daniel Kroening, kroening@kroening.com
 #include "custom_bitvector_analysis.h"
 
 #include <util/expr_util.h>
+#include <util/pointer_expr.h>
 #include <util/simplify_expr.h>
 #include <util/string_constant.h>
 #include <util/xml_irep.h>
@@ -267,12 +268,15 @@ void custom_bitvector_domaint::assign_struct_rec(
 
 void custom_bitvector_domaint::transform(
   const irep_idt &function_from,
-  locationt from,
+  trace_ptrt trace_from,
   const irep_idt &function_to,
-  locationt to,
+  trace_ptrt trace_to,
   ai_baset &ai,
   const namespacet &ns)
 {
+  locationt from{trace_from->current_location()};
+  locationt to{trace_to->current_location()};
+
   // upcast of ai
   custom_bitvector_analysist &cba=
     static_cast<custom_bitvector_analysist &>(ai);
@@ -772,19 +776,19 @@ void custom_bitvector_analysist::check(
 {
   unsigned pass=0, fail=0, unknown=0;
 
-  forall_goto_functions(f_it, goto_model.goto_functions)
+  for(const auto &gf_entry : goto_model.goto_functions.function_map)
   {
-    if(!f_it->second.body.has_assertion())
-       continue;
+    if(!gf_entry.second.body.has_assertion())
+      continue;
 
     // TODO this is a hard-coded hack
-    if(f_it->first=="__actual_thread_spawn")
+    if(gf_entry.first == "__actual_thread_spawn")
       continue;
 
     if(!use_xml)
-      out << "******** Function " << f_it->first << '\n';
+      out << "******** Function " << gf_entry.first << '\n';
 
-    forall_goto_program_instructions(i_it, f_it->second.body)
+    forall_goto_program_instructions(i_it, gf_entry.second.body)
     {
       exprt result;
       irep_idt description;
@@ -832,7 +836,7 @@ void custom_bitvector_analysist::check(
           out << ", " << description;
         out << ": ";
         const namespacet ns(goto_model.symbol_table);
-        out << from_expr(ns, f_it->first, result);
+        out << from_expr(ns, gf_entry.first, result);
         out << '\n';
       }
 

@@ -12,6 +12,7 @@ Author: Daniel Kroening, kroening@kroening.com
 #include "escape_analysis.h"
 
 #include <util/cprover_prefix.h>
+#include <util/pointer_expr.h>
 #include <util/simplify_expr.h>
 
 bool escape_domaint::is_tracked(const symbol_exprt &symbol)
@@ -166,13 +167,15 @@ void escape_domaint::get_rhs_aliases_address_of(
 }
 
 void escape_domaint::transform(
-  const irep_idt &,
-  locationt from,
-  const irep_idt &,
-  locationt,
-  ai_baset &,
-  const namespacet &)
+  const irep_idt &function_from,
+  trace_ptrt trace_from,
+  const irep_idt &function_to,
+  trace_ptrt trace_to,
+  ai_baset &ai,
+  const namespacet &ns)
 {
+  locationt from{trace_from->current_location()};
+
   if(has_values.is_false())
     return;
 
@@ -460,9 +463,9 @@ void escape_analysist::instrument(
 {
   const namespacet ns(goto_model.symbol_table);
 
-  Forall_goto_functions(f_it, goto_model.goto_functions)
+  for(auto &gf_entry : goto_model.goto_functions.function_map)
   {
-    Forall_goto_program_instructions(i_it, f_it->second.body)
+    Forall_goto_program_instructions(i_it, gf_entry.second.body)
     {
       get_state(i_it);
 
@@ -475,7 +478,12 @@ void escape_analysist::instrument(
         std::set<irep_idt> cleanup_functions;
         operator[](i_it).check_lhs(code_assign.lhs(), cleanup_functions);
         insert_cleanup(
-          f_it->second, i_it, code_assign.lhs(), cleanup_functions, false, ns);
+          gf_entry.second,
+          i_it,
+          code_assign.lhs(),
+          cleanup_functions,
+          false,
+          ns);
       }
       else if(instruction.type == DEAD)
       {
@@ -501,9 +509,14 @@ void escape_analysist::instrument(
         d.check_lhs(code_dead.symbol(), cleanup_functions2);
 
         insert_cleanup(
-          f_it->second, i_it, code_dead.symbol(), cleanup_functions1, true, ns);
+          gf_entry.second,
+          i_it,
+          code_dead.symbol(),
+          cleanup_functions1,
+          true,
+          ns);
         insert_cleanup(
-          f_it->second,
+          gf_entry.second,
           i_it,
           code_dead.symbol(),
           cleanup_functions2,

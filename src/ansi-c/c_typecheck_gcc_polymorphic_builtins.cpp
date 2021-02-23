@@ -14,6 +14,7 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <util/arith_tools.h>
 #include <util/c_types.h>
 #include <util/cprover_prefix.h>
+#include <util/pointer_expr.h>
 #include <util/std_types.h>
 #include <util/string_constant.h>
 
@@ -1166,6 +1167,9 @@ static void instantiate_atomic_compare_exchange(
     source_location}};
   success_fence.add_source_location() = source_location;
 
+  code_assignt assign_not_equal{dereference_exprt{parameter_exprs[1]},
+                                deref_ptr};
+  assign_not_equal.add_source_location() = source_location;
   code_expressiont failure_fence{side_effect_expr_function_callt{
     symbol_exprt::typeless("__atomic_thread_fence"),
     {parameter_exprs[5]},
@@ -1173,10 +1177,10 @@ static void instantiate_atomic_compare_exchange(
     source_location}};
   failure_fence.add_source_location() = source_location;
 
-  block.add(
-    code_ifthenelset{result,
-                     code_blockt{{std::move(assign), std::move(success_fence)}},
-                     std::move(failure_fence)});
+  block.add(code_ifthenelset{
+    result,
+    code_blockt{{std::move(assign), std::move(success_fence)}},
+    code_blockt{{std::move(assign_not_equal), std::move(failure_fence)}}});
 
   block.add(code_expressiont{side_effect_expr_function_callt{
     symbol_exprt::typeless(CPROVER_PREFIX "atomic_end"),

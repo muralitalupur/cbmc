@@ -9,9 +9,8 @@ Author: Daniel Kroening, kroening@kroening.com
 #include "ssa_expr.h"
 
 #include <sstream>
-#include <cassert>
 
-#include <util/arith_tools.h>
+#include "pointer_expr.h"
 
 /// If \p expr is:
 /// - a symbol_exprt "s" add "s" to the stream \p os
@@ -29,8 +28,7 @@ initialize_ssa_identifier(std::ostream &os, const exprt &expr)
   }
   if(auto index = expr_try_dynamic_cast<index_exprt>(expr))
   {
-    const auto idx =
-      numeric_cast_v<mp_integer>(to_constant_expr(index->index()));
+    const irep_idt &idx = to_constant_expr(index->index()).get_value();
     return initialize_ssa_identifier(os, index->array()) << "[[" << idx << "]]";
   }
   if(auto symbol = expr_try_dynamic_cast<symbol_exprt>(expr))
@@ -77,8 +75,7 @@ static void build_ssa_identifier_rec(
 
     build_ssa_identifier_rec(index.array(), l0, l1, l2, os, l1_object_os);
 
-    const mp_integer idx =
-      numeric_cast_v<mp_integer>(to_constant_expr(index.index()));
+    const irep_idt &idx = to_constant_expr(index.index()).get_value();
     os << "[[" << idx << "]]";
     l1_object_os << "[[" << idx << "]]";
   }
@@ -216,11 +213,6 @@ bool ssa_exprt::can_build_identifier(const exprt &expr)
     return can_build_identifier(to_index_expr(expr).array());
   else
     return false;
-}
-
-void ssa_exprt::update_identifier()
-{
-  ::update_identifier(*this);
 }
 
 ssa_exprt remove_level_2(ssa_exprt ssa)

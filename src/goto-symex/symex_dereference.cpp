@@ -139,8 +139,7 @@ exprt goto_symext::address_arithmetic(
 
     // handle field-sensitive SSA symbol
     mp_integer offset=0;
-    if(expr.id()==ID_symbol &&
-       expr.get_bool(ID_C_SSA_symbol))
+    if(is_ssa_expr(expr))
     {
       auto offset_opt = compute_pointer_offset(expr, ns);
       PRECONDITION(offset_opt.has_value());
@@ -264,10 +263,12 @@ void goto_symext::dereference_rec(exprt &expr, statet &state, bool write)
       state.symbol_table,
       symex_dereference_state,
       language_mode,
-      expr_is_not_null);
+      expr_is_not_null,
+      log);
 
     // std::cout << "**** " << format(tmp1) << '\n';
-    exprt tmp2 = dereference.dereference(tmp1);
+    exprt tmp2 =
+      dereference.dereference(tmp1, symex_config.show_points_to_sets);
     // std::cout << "**** " << format(tmp2) << '\n';
 
     expr.swap(tmp2);

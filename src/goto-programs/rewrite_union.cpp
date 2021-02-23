@@ -12,13 +12,13 @@ Author: Daniel Kroening, kroening@kroening.com
 #include "rewrite_union.h"
 
 #include <util/arith_tools.h>
-#include <util/std_expr.h>
-#include <util/std_code.h>
 #include <util/byte_operators.h>
+#include <util/c_types.h>
+#include <util/pointer_expr.h>
+#include <util/std_code.h>
+#include <util/std_expr.h>
 
 #include <goto-programs/goto_model.h>
-
-#include <util/c_types.h>
 
 static bool have_to_rewrite_union(const exprt &expr)
 {
@@ -101,23 +101,23 @@ void rewrite_union(exprt &expr)
 
 void rewrite_union(goto_functionst::goto_functiont &goto_function)
 {
-  Forall_goto_program_instructions(it, goto_function.body)
+  for(auto &instruction : goto_function.body.instructions)
   {
-    rewrite_union(it->code);
+    rewrite_union(instruction.code);
 
-    if(it->has_condition())
+    if(instruction.has_condition())
     {
-      exprt c = it->get_condition();
+      exprt c = instruction.get_condition();
       rewrite_union(c);
-      it->set_condition(c);
+      instruction.set_condition(c);
     }
   }
 }
 
 void rewrite_union(goto_functionst &goto_functions)
 {
-  Forall_goto_functions(it, goto_functions)
-    rewrite_union(it->second);
+  for(auto &gf_entry : goto_functions.function_map)
+    rewrite_union(gf_entry.second);
 }
 
 void rewrite_union(goto_modelt &goto_model)

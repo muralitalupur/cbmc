@@ -26,16 +26,13 @@ Author: Daniel Kroening, kroening@kroening.com
 
 #include <jsil/jsil_language.h>
 
-#include <goto-programs/adjust_float_expressions.h>
+#include <goto-programs/add_malloc_may_fail_variable_initializations.h>
 #include <goto-programs/goto_convert_functions.h>
 #include <goto-programs/goto_inline.h>
 #include <goto-programs/initialize_goto_model.h>
 #include <goto-programs/link_to_library.h>
+#include <goto-programs/process_goto_program.h>
 #include <goto-programs/read_goto_binary.h>
-#include <goto-programs/remove_complex.h>
-#include <goto-programs/remove_function_pointers.h>
-#include <goto-programs/remove_returns.h>
-#include <goto-programs/remove_vector.h>
 #include <goto-programs/remove_virtual_functions.h>
 #include <goto-programs/set_properties.h>
 #include <goto-programs/show_properties.h>
@@ -50,6 +47,11 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <analyses/is_threaded.h>
 #include <analyses/local_control_flow_history.h>
 #include <analyses/local_may_alias.h>
+#include <analyses/variable-sensitivity/three_way_merge_abstract_interpreter.h>
+#include <analyses/variable-sensitivity/variable_sensitivity_configuration.h>
+#include <analyses/variable-sensitivity/variable_sensitivity_dependence_graph.h>
+#include <analyses/variable-sensitivity/variable_sensitivity_domain.h>
+#include <analyses/variable-sensitivity/variable_sensitivity_object_factory.h>
 
 #include <langapi/mode.h>
 #include <langapi/language.h>
@@ -67,6 +69,8 @@ Author: Daniel Kroening, kroening@kroening.com
 #include "static_verifier.h"
 #include "taint_analysis.h"
 #include "unreachable_instructions.h"
+
+void vsd_options(optionst &options, const cmdlinet &cmdline);
 
 goto_analyzer_parse_optionst::goto_analyzer_parse_optionst(
   int argc,
@@ -117,23 +121,8 @@ void goto_analyzer_parse_optionst::get_command_line_options(optionst &options)
     config.cpp.set_cpp11();
 #endif
 
-#if 0
-  // check assertions
-  if(cmdline.isset("no-assertions"))
-    options.set_option("assertions", false);
-  else
-    options.set_option("assertions", true);
-
-  // use assumptions
-  if(cmdline.isset("no-assumptions"))
-    options.set_option("assumptions", false);
-  else
-    options.set_option("assumptions", true);
-
-  // magic error label
-  if(cmdline.isset("error-label"))
-    options.set_option("error-label", cmdline.get_values("error-label"));
-#endif
+  // all checks supported by goto_check
+  PARSE_OPTIONS_GOTO_CHECK(cmdline, options);
 
   // The user should either select:
   //  1. a specific analysis, or
@@ -255,6 +244,8 @@ void goto_analyzer_parse_optionst::get_command_line_options(optionst &options)
     // Abstract interpreter choice
     if(cmdline.isset("recursive-interprocedural"))
       options.set_option("recursive-interprocedural", true);
+    else if(cmdline.isset("three-way-merge"))
+      options.set_option("three-way-merge", true);
     else if(cmdline.isset("legacy-ait") || cmdline.isset("location-sensitive"))
     {
       options.set_option("legacy-ait", true);
@@ -355,6 +346,21 @@ void goto_analyzer_parse_optionst::get_command_line_options(optionst &options)
       options.set_option("non-null", true);
       options.set_option("domain set", true);
     }
+    else if(cmdline.isset("vsd") || cmdline.isset("variable-sensitivity"))
+    {
+      options.set_option("vsd", true);
+      options.set_option(
+        "data-dependencies", cmdline.isset("vsd-data-dependencies"));
+
+      vsd_options(options, cmdline);
+    }
+    else if(cmdline.isset("dependence-graph-vs"))
+    {
+      options.set_option("dependence-graph-vs", true);
+      options.set_option("data-dependencies", true);
+
+      vsd_options(options, cmdline);
+    }
 
     // Reachability questions, when given with a domain swap from specific
     // to general tasks so that they can use the domain & parameterisations.
@@ -414,8 +420,14 @@ ai_baset *goto_analyzer_parse_optionst::build_analyzer(
   const optionst &options,
   const namespacet &ns)
 {
+  auto vsd_config = vsd_configt::from_options(options);
+  auto vs_object_factory =
+    variable_sensitivity_object_factoryt::configured_with(vsd_config);
+
   // These support all of the option categories
-  if(options.get_bool_option("recursive-interprocedural"))
+  if(
+    options.get_bool_option("recursive-interprocedural") ||
+    options.get_bool_option("three-way-merge"))
   {
     // Build the history factory
     std::unique_ptr<ai_history_factory_baset> hf = nullptr;
@@ -449,8 +461,14 @@ ai_baset *goto_analyzer_parse_optionst::build_analyzer(
       df = util_make_unique<
         ai_domain_factory_default_constructort<interval_domaint>>();
     }
+    else if(options.get_bool_option("vsd"))
+    {
+      df = util_make_unique<variable_sensitivity_domain_factoryt>(
+        vs_object_factory, vsd_config);
+    }
     // non-null is not fully supported, despite the historical options
     // dependency-graph is quite heavily tied to the legacy-ait infrastructure
+    // dependency-graph-vs is very similar to dependency-graph
 
     // Build the storage object
     std::unique_ptr<ai_storage_baset> st = nullptr;
@@ -472,7 +490,15 @@ ai_baset *goto_analyzer_parse_optionst::build_analyzer(
         return new ai_recursive_interproceduralt(
           std::move(hf), std::move(df), std::move(st));
       }
-      UNREACHABLE;
+      else if(options.get_bool_option("three-way-merge"))
+      {
+        // Only works with VSD
+        if(options.get_bool_option("vsd"))
+        {
+          return new ai_three_way_merget(
+            std::move(hf), std::move(df), std::move(st));
+        }
+      }
     }
   }
   else if(options.get_bool_option("legacy-ait"))
@@ -485,6 +511,17 @@ ai_baset *goto_analyzer_parse_optionst::build_analyzer(
     else if(options.get_bool_option("dependence-graph"))
     {
       return new dependence_grapht(ns);
+    }
+    else if(options.get_bool_option("dependence-graph-vs"))
+    {
+      return new variable_sensitivity_dependence_grapht(
+        goto_model.goto_functions, ns, vs_object_factory, vsd_config);
+    }
+    else if(options.get_bool_option("vsd"))
+    {
+      auto df = util_make_unique<variable_sensitivity_domain_factoryt>(
+        vs_object_factory, vsd_config);
+      return new ait<variable_sensitivity_domaint>(std::move(df));
     }
     else if(options.get_bool_option("intervals"))
     {
@@ -544,6 +581,10 @@ int goto_analyzer_parse_optionst::doit()
 
   goto_model = initialize_goto_model(cmdline.args, ui_message_handler, options);
 
+  // Preserve backwards compatibility in processing
+  options.set_option("partial-inline", true);
+  options.set_option("rewrite-union", false);
+
   if(process_goto_program(options))
     return CPROVER_EXIT_INTERNAL_ERROR;
 
@@ -572,11 +613,9 @@ int goto_analyzer_parse_optionst::doit()
   return perform_analysis(options);
 }
 
-
 /// Depending on the command line mode, run one of the analysis tasks
 int goto_analyzer_parse_optionst::perform_analysis(const optionst &options)
 {
-  adjust_float_expressions(goto_model);
   if(options.get_bool_option("taint"))
   {
     std::string taint_file=cmdline.get_value("taint");
@@ -675,13 +714,13 @@ int goto_analyzer_parse_optionst::perform_analysis(const optionst &options)
   {
     namespacet ns(goto_model.symbol_table);
 
-    forall_goto_functions(it, goto_model.goto_functions)
+    for(const auto &gf_entry : goto_model.goto_functions.function_map)
     {
       std::cout << ">>>>\n";
-      std::cout << ">>>> " << it->first << '\n';
+      std::cout << ">>>> " << gf_entry.first << '\n';
       std::cout << ">>>>\n";
-      local_may_aliast local_may_alias(it->second);
-      local_may_alias.output(std::cout, it->second, ns);
+      local_may_aliast local_may_alias(gf_entry.second);
+      local_may_alias.output(std::cout, gf_entry.second, ns);
       std::cout << '\n';
     }
 
@@ -721,7 +760,17 @@ int goto_analyzer_parse_optionst::perform_analysis(const optionst &options)
     // Build analyzer
     log.status() << "Selecting abstract domain" << messaget::eom;
     namespacet ns(goto_model.symbol_table);  // Must live as long as the domain.
-    std::unique_ptr<ai_baset> analyzer(build_analyzer(options, ns));
+    std::unique_ptr<ai_baset> analyzer;
+
+    try
+    {
+      analyzer.reset(build_analyzer(options, ns));
+    }
+    catch(const invalid_command_line_argument_exceptiont &e)
+    {
+      log.error() << e.what() << messaget::eom;
+      return CPROVER_EXIT_USAGE_ERROR;
+    }
 
     if(analyzer == nullptr)
     {
@@ -793,7 +842,6 @@ int goto_analyzer_parse_optionst::perform_analysis(const optionst &options)
       CPROVER_EXIT_VERIFICATION_UNSAFE : CPROVER_EXIT_VERIFICATION_SAFE;
   }
 
-
   // Final defensive error case
   log.error() << "no analysis option given -- consider reading --help"
               << messaget::eom;
@@ -803,48 +851,22 @@ int goto_analyzer_parse_optionst::perform_analysis(const optionst &options)
 bool goto_analyzer_parse_optionst::process_goto_program(
   const optionst &options)
 {
-  {
-    #if 0
-    // Remove inline assembler; this needs to happen before
-    // adding the library.
-    remove_asm(goto_model);
+  // Remove inline assembler; this needs to happen before
+  // adding the library.
+  remove_asm(goto_model);
 
-    // add the library
-    log.status() << "Adding CPROVER library (" << config.ansi_c.arch << ")" << messaget::eom;
-    link_to_library(
-      goto_model, ui_message_handler, cprover_cpp_library_factory);
-    link_to_library(goto_model, ui_message_handler, cprover_c_library_factory);
-    #endif
+  // add the library
+  log.status() << "Adding CPROVER library (" << config.ansi_c.arch << ")"
+               << messaget::eom;
+  link_to_library(goto_model, ui_message_handler, cprover_cpp_library_factory);
+  link_to_library(goto_model, ui_message_handler, cprover_c_library_factory);
 
-    // remove function pointers
-    log.status() << "Removing function pointers and virtual functions"
-                 << messaget::eom;
-    remove_function_pointers(
-      ui_message_handler, goto_model, cmdline.isset("pointer-check"));
+  add_malloc_may_fail_variable_initializations(goto_model);
 
-    // do partial inlining
-    log.status() << "Partial Inlining" << messaget::eom;
-    goto_partial_inline(goto_model, ui_message_handler);
+  // Common removal of types and complex constructs
+  if(::process_goto_program(goto_model, options, log))
+    return true;
 
-    // remove returns, gcc vectors, complex
-    remove_returns(goto_model);
-    remove_vector(goto_model);
-    remove_complex(goto_model);
-
-#if 0
-    // add generic checks
-    log.status() << "Generic Property Instrumentation" << messaget::eom;
-    goto_check(options, goto_model);
-#else
-    (void)options; // unused parameter
-#endif
-
-    // recalculate numbers, etc.
-    goto_model.goto_functions.update();
-
-    // add loop ids
-    goto_model.goto_functions.compute_loop_numbers();
-  }
   return false;
 }
 
@@ -880,6 +902,8 @@ void goto_analyzer_parse_optionst::help()
     // NOLINTNEXTLINE(whitespace/line_length)
     " --recursive-interprocedural  use recursion to handle interprocedural reasoning\n"
     // NOLINTNEXTLINE(whitespace/line_length)
+    " --three-way-merge            use VSD's three-way merge on return from function call\n"
+    // NOLINTNEXTLINE(whitespace/line_length)
     " --legacy-ait                 recursion for function and one domain per location\n"
     // NOLINTNEXTLINE(whitespace/line_length)
     " --legacy-concurrent          legacy-ait with an extended fixed-point for concurrency\n"
@@ -909,6 +933,17 @@ void goto_analyzer_parse_optionst::help()
     " --intervals                  an interval for each variable\n"
     " --non-null                   tracks which pointers are non-null\n"
     " --dependence-graph           data and control dependencies between instructions\n" // NOLINT(*)
+    " --vsd                        a configurable non-relational domain\n" // NOLINT(*)
+    " --dependence-graph-vs        dependencies between instructions using VSD\n" // NOLINT(*)
+    "\n"
+    "Variable sensitivity domain (VSD) options:\n"
+    " --vsd-values                 value tracking - constants|intervals|set-of-constants\n"
+    " --vsd-structs                struct field sensitive analysis - top-bottom|every-field\n"
+    " --vsd-arrays                 array entry sensitive analysis - top-bottom|every-element\n"
+    " --vsd-pointers               pointer sensitive analysis - top-bottom|constants|value-set\n"
+    " --vsd-unions                 union sensitive analysis - top-bottom\n"
+    " --vsd-flow-insensitive       disables flow sensitivity\n"
+    " --vsd-data-dependencies      track data dependencies\n"
     "\n"
     "Storage options:\n"
     // NOLINTNEXTLINE(whitespace/line_length)
@@ -973,4 +1008,17 @@ void goto_analyzer_parse_optionst::help()
     HELP_TIMESTAMP
     "\n";
   // clang-format on
+}
+
+void vsd_options(optionst &options, const cmdlinet &cmdline)
+{
+  options.set_option("domain set", true);
+
+  // Configuration of VSD
+  options.set_option("values", cmdline.get_value("vsd-values"));
+  options.set_option("pointers", cmdline.get_value("vsd-pointers"));
+  options.set_option("arrays", cmdline.get_value("vsd-arrays"));
+  options.set_option("structs", cmdline.get_value("vsd-structs"));
+  options.set_option("unions", cmdline.get_value("vsd-unions"));
+  options.set_option("flow-insensitive", cmdline.isset("vsd-flow-insensitive"));
 }

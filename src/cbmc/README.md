@@ -48,7 +48,8 @@ formula using two different possible procedures:
 
 1. When `--stop-on-fail` is passed on the command-line, the formula is solved
    once to find any violated assertion. This is implemented directly in
-   class `bmct`.
+   class `bmct`. If the formula is satisfiable, a counter-example trace is
+   generated.
 2. When `--stop-on-fail` is not passed, BMC is run in "all-properties" mode.
    This categorises the assertions into groups that represent the same property,
    and the solver is run repeatedly to try to satisfy each property at least
@@ -76,13 +77,15 @@ by other mechanism may categorise their properties differently.
 
 ### Coverage mode
 
-There is one further BMC mode that differs more fundamentally: when `--cover` is
-passed, assertions in the program text are converted into assumptions (these
+There is one further BMC mode that differs more fundamentally: when `--cover`
+is passed, assertions in the program text are converted into assumptions (these
 must hold for control flow to proceed past them, but are not goals for the
-equation solver), while new `assert(false)` statements are added throughout the
-source program representing coverage goals. The equation solving process then
-proceeds the same as in all-properties mode. Coverage solving is implemented by
-`bmc_covert`, but is structurally practically identical to
+equation solver; In cases where this behaviour is undesirable you can pass the
+`--cover-failed-assertions` which makes coverage checking continue even for
+paths where assertions fail), while new `assert(false)` statements are added
+throughout the source program representing coverage goals. The equation solving
+process then proceeds the same as in all-properties mode. Coverage solving is
+implemented by `bmc_covert`, but is structurally practically identical to
 `bmc_all_propertiest`-- only the reporting differs (goals are called "covered"
 rather than "failed").
 

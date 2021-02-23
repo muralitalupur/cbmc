@@ -15,7 +15,6 @@ Author: Daniel Kroening, kroening@kroening.com
 
 class namespacet;
 
-#include "deprecate.h"
 #include "source_location.h"
 #include "validate_types.h"
 #include "validation_mode.h"
@@ -32,7 +31,8 @@ public:
 
   explicit typet(const irep_idt &_id):irept(_id) { }
 
-#if defined(__clang__) || !defined(__GNUC__) || __GNUC__ >= 6
+  // the STL implementation shipped with GCC 5 is broken
+#if !defined(__GLIBCXX__) || __GLIBCXX__ >= 20181026
   typet(irep_idt _id, typet _subtype)
     : irept(std::move(_id), {}, {std::move(_subtype)})
   {
@@ -149,14 +149,6 @@ public:
     : typet(std::move(_id), std::move(_subtype))
   {
   }
-
-  #if 0
-  const typet &subtype() const
-  { return (typet &)find(ID_subtype); }
-
-  typet &subtype()
-  { return (typet &)add(ID_subtype); }
-  #endif
 };
 
 inline const type_with_subtypet &to_type_with_subtype(const typet &type)
@@ -212,17 +204,6 @@ inline type_with_subtypest &to_type_with_subtypes(typet &type)
 {
   return static_cast<type_with_subtypest &>(type);
 }
-
-#define forall_subtypes(it, type) \
-  if((type).has_subtypes()) /* NOLINT(readability/braces) */ \
-    for(type_with_subtypest::subtypest::const_iterator it=to_type_with_subtypes(type).subtypes().begin(), \
-        it##_end=to_type_with_subtypes(type).subtypes().end(); \
-        it!=it##_end; ++it)
-
-#define Forall_subtypes(it, type) \
-  if((type).has_subtypes()) /* NOLINT(readability/braces) */ \
-    for(type_with_subtypest::subtypest::iterator it=to_type_with_subtypes(type).subtypes().begin(); \
-        it!=to_type_with_subtypes(type).subtypes().end(); ++it)
 
 /// Remove const qualifier from type (if any).
 /// Returns type as is if there is no const qualifier.

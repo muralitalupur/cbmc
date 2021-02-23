@@ -12,7 +12,9 @@ Author: Daniel Kroening, kroening@kroening.com
 #include "c_typecheck_base.h"
 
 #include <util/arith_tools.h>
+#include <util/byte_operators.h>
 #include <util/c_types.h>
+#include <util/config.h>
 #include <util/cprover_prefix.h>
 #include <util/expr_initializer.h>
 #include <util/prefix.h>
@@ -37,7 +39,9 @@ void c_typecheck_baset::do_initializer(
                    "any array must have a size");
 
     // we don't allow initialisation with symbols of array type
-    if(result.id() != ID_array && result.id() != ID_array_of)
+    if(
+      result.id() != ID_array && result.id() != ID_array_of &&
+      result.id() != ID_compound_literal)
     {
       error().source_location = result.source_location();
       error() << "invalid array initializer " << to_string(result)
@@ -478,21 +482,54 @@ exprt::operandst::const_iterator c_typecheck_baset::do_designated_initializer(
       const union_typet::componentst &components=
         union_type.components();
 
-      DATA_INVARIANT(index<components.size(),
-                     "member designator is bounded by components size");
+      if(components.empty())
+      {
+        error().source_location = value.source_location();
+        error() << "union member designator found for empty union" << eom;
+        throw 0;
+      }
+      else if(init_it != initializer_list.operands().begin())
+      {
+        if(config.ansi_c.mode == configt::ansi_ct::flavourt::VISUAL_STUDIO)
+        {
+          error().source_location = value.source_location();
+          error() << "too many initializers" << eom;
+          throw 0;
+        }
+        else
+        {
+          warning().source_location = value.source_location();
+          warning() << "excess elements in union initializer" << eom;
 
-      const union_typet::componentt &component=union_type.components()[index];
+          return ++init_it;
+        }
+      }
+      else if(index >= components.size())
+      {
+        error().source_location = value.source_location();
+        error() << "union member designator " << index << " out of bounds ("
+                << components.size() << ")" << eom;
+        throw 0;
+      }
 
-      if(dest->id()==ID_union &&
-         dest->get(ID_component_name)==component.get_name())
+      const union_typet::componentt &component = components[index];
+
+      DATA_INVARIANT(
+        dest->id() == ID_union, "union should be zero initialized");
+
+      if(dest->get(ID_component_name) == component.get_name())
       {
         // Already right union component. We can initialize multiple submembers,
         // so do not overwrite this.
+        dest = &(to_union_expr(*dest).op());
       }
       else
       {
-        // Note that gcc issues a warning if the union component is switched.
-        // Build a union expression from given component.
+        // The first component is not the maximum member, which the (default)
+        // zero initializer prepared. Replace this by a component-specific
+        // initializer; other bytes have an unspecified value (C Standard
+        // 6.2.6.1(7)). In practice, objects of static lifetime are fully zero
+        // initialized.
         const auto zero =
           zero_initializer(component.type(), value.source_location(), *this);
         if(!zero.has_value())
@@ -502,12 +539,23 @@ exprt::operandst::const_iterator c_typecheck_baset::do_designated_initializer(
                   << to_string(component.type()) << "'" << eom;
           throw 0;
         }
-        union_exprt union_expr(component.get_name(), *zero, type);
-        union_expr.add_source_location()=value.source_location();
-        *dest=union_expr;
-      }
 
-      dest = &(to_union_expr(*dest).op());
+        if(current_symbol.is_static_lifetime)
+        {
+          byte_update_exprt byte_update{
+            byte_update_id(), *dest, from_integer(0, index_type()), *zero};
+          byte_update.add_source_location() = value.source_location();
+          *dest = std::move(byte_update);
+          dest = &(to_byte_update_expr(*dest).op2());
+        }
+        else
+        {
+          union_exprt union_expr(component.get_name(), *zero, type);
+          union_expr.add_source_location() = value.source_location();
+          *dest = std::move(union_expr);
+          dest = &(to_union_expr(*dest).op());
+        }
+      }
     }
     else
       UNREACHABLE;
@@ -872,6 +920,26 @@ exprt c_typecheck_baset::do_initializer_list(
 
   const typet &full_type=follow(type);
 
+  // 6.7.9, 14: An array of character type may be initialized by a character
+  // string literal or UTF-8 string literal, optionally enclosed in braces.
+  if(
+    full_type.id() == ID_array && value.operands().size() >= 1 &&
+    to_multi_ary_expr(value).op0().id() == ID_string_constant &&
+    (full_type.subtype().id() == ID_signedbv ||
+     full_type.subtype().id() == ID_unsignedbv) &&
+    to_bitvector_type(full_type.subtype()).get_width() ==
+      char_type().get_width())
+  {
+    if(value.operands().size() > 1)
+    {
+      warning().source_location = value.find_source_location();
+      warning() << "ignoring excess initializers" << eom;
+    }
+
+    return do_initializer_rec(
+      to_multi_ary_expr(value).op0(), type, force_constant);
+  }
+
   exprt result;
   if(full_type.id()==ID_struct ||
      full_type.id()==ID_union ||
@@ -908,26 +976,6 @@ exprt c_typecheck_baset::do_initializer_list(
         throw 0;
       }
       result = *zero;
-    }
-
-    // 6.7.9, 14: An array of character type may be initialized by a character
-    // string literal or UTF-8 string literal, optionally enclosed in braces.
-    if(
-      value.operands().size() >= 1 &&
-      to_multi_ary_expr(value).op0().id() == ID_string_constant &&
-      (full_type.subtype().id() == ID_signedbv ||
-       full_type.subtype().id() == ID_unsignedbv) &&
-      to_bitvector_type(full_type.subtype()).get_width() ==
-        char_type().get_width())
-    {
-      if(value.operands().size()>1)
-      {
-        warning().source_location=value.find_source_location();
-        warning() << "ignoring excess initializers" << eom;
-      }
-
-      return do_initializer_rec(
-        to_multi_ary_expr(value).op0(), type, force_constant);
     }
   }
   else

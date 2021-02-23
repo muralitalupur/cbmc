@@ -15,6 +15,7 @@ Author: Daniel Kroening, kroening@kroening.com
 //
 
 #include <util/byte_operators.h>
+#include <util/endianness_map.h>
 #include <util/expr.h>
 #include <util/mp_arith.h>
 #include <util/optional.h>
@@ -26,10 +27,15 @@ Author: Daniel Kroening, kroening@kroening.com
 #include "boolbv_map.h"
 #include "arrays.h"
 
+class array_comprehension_exprt;
+class bswap_exprt;
+class concatenation_exprt;
 class extractbit_exprt;
 class extractbits_exprt;
-class array_comprehension_exprt;
+class floatbv_typecast_exprt;
+class ieee_float_op_exprt;
 class member_exprt;
+class replication_exprt;
 
 class boolbvt:public arrayst
 {
@@ -37,13 +43,14 @@ public:
   boolbvt(
     const namespacet &_ns,
     propt &_prop,
-    message_handlert &message_handler)
-    : arrayst(_ns, _prop, message_handler),
+    message_handlert &message_handler,
+    bool get_array_constraints = false)
+    : arrayst(_ns, _prop, message_handler, get_array_constraints),
       unbounded_array(unbounded_arrayt::U_NONE),
-      boolbv_width(_ns),
+      bv_width(_ns),
       bv_utils(_prop),
       functions(*this),
-      map(_prop, boolbv_width)
+      map(_prop)
   {
   }
 
@@ -71,12 +78,6 @@ public:
     SUB::post_process();
   }
 
-  // get literals for variables/expressions, if available
-  virtual bool literal(
-    const exprt &expr,
-    std::size_t bit,
-    literalt &literal) const;
-
   enum class unbounded_arrayt { U_NONE, U_ALL, U_AUTO };
   unbounded_arrayt unbounded_array;
 
@@ -92,9 +93,19 @@ public:
     return map;
   }
 
-  boolbv_widtht boolbv_width;
+  virtual std::size_t boolbv_width(const typet &type) const
+  {
+    return bv_width(type);
+  }
+
+  virtual endianness_mapt
+  endianness_map(const typet &type, bool little_endian) const
+  {
+    return endianness_mapt{type, little_endian, ns};
+  }
 
 protected:
+  boolbv_widtht bv_width;
   bv_utilst bv_utils;
 
   // uninterpreted functions
@@ -230,7 +241,6 @@ protected:
   virtual exprt bv_get_rec(
     const exprt &expr,
     const bvt &bv,
-    const std::vector<bool> &unknown,
     std::size_t offset,
     const typet &type) const;
 
@@ -262,7 +272,7 @@ protected:
   offset_mapt build_offset_map(const struct_typet &src);
 
   // strings
-  numbering<irep_idt> string_numbering;
+  numberingt<irep_idt> string_numbering;
 };
 
 #endif // CPROVER_SOLVERS_FLATTENING_BOOLBV_H

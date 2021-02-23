@@ -42,6 +42,7 @@ Date: June 2006
 #include <langapi/language_file.h>
 #include <langapi/mode.h>
 
+#include <linking/linking.h>
 #include <linking/static_lifetime_init.h>
 
 #define DOTGRAPHSETTINGS  "color=black;" \
@@ -56,8 +57,6 @@ Date: June 2006
 /// \return true on error, false otherwise
 bool compilet::doit()
 {
-  goto_model.goto_functions.clear();
-
   add_compiler_specific_defines();
 
   // Parse command line for source and object file names
@@ -69,51 +68,52 @@ bool compilet::doit()
   {
     if(!find_library(library))
       // GCC is going to complain if this doesn't exist
-      debug() << "Library not found: " << library << " (ignoring)" << eom;
+      log.debug() << "Library not found: " << library << " (ignoring)"
+                  << messaget::eom;
   }
 
-  statistics() << "No. of source files: " << source_files.size() << eom;
-  statistics() << "No. of object files: " << object_files.size() << eom;
+  log.statistics() << "No. of source files: " << source_files.size()
+                   << messaget::eom;
+  log.statistics() << "No. of object files: " << object_files.size()
+                   << messaget::eom;
 
   // Work through the given source files
 
   if(source_files.empty() && object_files.empty())
   {
-    error() << "no input files" << eom;
+    log.error() << "no input files" << messaget::eom;
     return true;
   }
 
   if(mode==LINK_LIBRARY && !source_files.empty())
   {
-    error() << "cannot link source files" << eom;
+    log.error() << "cannot link source files" << messaget::eom;
     return true;
   }
 
   if(mode==PREPROCESS_ONLY && !object_files.empty())
   {
-    error() << "cannot preprocess object files" << eom;
+    log.error() << "cannot preprocess object files" << messaget::eom;
     return true;
   }
 
-  const unsigned warnings_before=
-    get_message_handler().get_message_count(messaget::M_WARNING);
+  const unsigned warnings_before =
+    log.get_message_handler().get_message_count(messaget::M_WARNING);
 
-  if(!source_files.empty())
-    if(compile())
-      return true;
+  auto symbol_table_opt = compile();
+  if(!symbol_table_opt.has_value())
+    return true;
 
   if(mode==LINK_LIBRARY ||
      mode==COMPILE_LINK ||
      mode==COMPILE_LINK_EXECUTABLE)
   {
-    if(link())
+    if(link(*symbol_table_opt))
       return true;
   }
 
-  return
-    warning_is_fatal &&
-    get_message_handler().get_message_count(messaget::M_WARNING)!=
-    warnings_before;
+  return warning_is_fatal && log.get_message_handler().get_message_count(
+                               messaget::M_WARNING) != warnings_before;
 }
 
 enum class file_typet
@@ -170,22 +170,23 @@ static file_typet detect_file_type(
 /// \return false on success, true on error.
 bool compilet::add_input_file(const std::string &file_name)
 {
-  switch(detect_file_type(file_name, get_message_handler()))
+  switch(detect_file_type(file_name, log.get_message_handler()))
   {
   case file_typet::FAILED_TO_OPEN_FILE:
-    warning() << "failed to open file '" << file_name
-              << "': " << std::strerror(errno) << eom;
+    log.warning() << "failed to open file '" << file_name
+                  << "': " << std::strerror(errno) << messaget::eom;
     return warning_is_fatal; // generously ignore unless -Werror
 
   case file_typet::UNKNOWN:
     // unknown extension, not a goto binary, will silently ignore
-    debug() << "unknown file type in '" << file_name << "'" << eom;
+    log.debug() << "unknown file type in '" << file_name << "'"
+                << messaget::eom;
     return false;
 
   case file_typet::ELF_OBJECT:
     // ELF file without goto-cc section, silently ignore
-    debug() << "ELF object without goto-cc section: '" << file_name << "'"
-            << eom;
+    log.debug() << "ELF object without goto-cc section: '" << file_name << "'"
+                << messaget::eom;
     return false;
 
   case file_typet::SOURCE_FILE:
@@ -226,7 +227,7 @@ bool compilet::add_files_from_archive(
       run("ar", {"ar", "x", concat_dir_file(working_directory, file_name)});
     if(ret != 0)
     {
-      error() << "Failed to extract archive " << file_name << eom;
+      log.error() << "Failed to extract archive " << file_name << messaget::eom;
       return true;
     }
   }
@@ -241,7 +242,7 @@ bool compilet::add_files_from_archive(
     "");
   if(ret != 0)
   {
-    error() << "Failed to list archive " << file_name << eom;
+    log.error() << "Failed to list archive " << file_name << messaget::eom;
     return true;
   }
 
@@ -252,10 +253,11 @@ bool compilet::add_files_from_archive(
   {
     std::string t = concat_dir_file(tstr, line);
 
-    if(is_goto_binary(t, get_message_handler()))
+    if(is_goto_binary(t, log.get_message_handler()))
       object_files.push_back(t);
     else
-      debug() << "Object file is not a goto binary: " << line << eom;
+      log.debug() << "Object file is not a goto binary: " << line
+                  << messaget::eom;
   }
 
   if(!thin_archive)
@@ -283,14 +285,14 @@ bool compilet::find_library(const std::string &name)
     {
       library_file_name = concat_dir_file(library_path, "lib" + name + ".so");
 
-      switch(detect_file_type(library_file_name, get_message_handler()))
+      switch(detect_file_type(library_file_name, log.get_message_handler()))
       {
       case file_typet::GOTO_BINARY:
         return !add_input_file(library_file_name);
 
       case file_typet::ELF_OBJECT:
-        warning() << "Warning: Cannot read ELF library " << library_file_name
-                  << eom;
+        log.warning() << "Warning: Cannot read ELF library "
+                      << library_file_name << messaget::eom;
         return warning_is_fatal;
 
       case file_typet::THIN_ARCHIVE:
@@ -308,16 +310,19 @@ bool compilet::find_library(const std::string &name)
 
 /// parses object files and links them
 /// \return true on error, false otherwise
-bool compilet::link()
+bool compilet::link(optionalt<symbol_tablet> &&symbol_table)
 {
   // "compile" hitherto uncompiled functions
-  statistics() << "Compiling functions" << eom;
-  convert_symbols(goto_model.goto_functions);
+  log.statistics() << "Compiling functions" << messaget::eom;
+  goto_modelt goto_model;
+  if(symbol_table.has_value())
+    goto_model.symbol_table = std::move(*symbol_table);
+  convert_symbols(goto_model);
 
   // parse object files
   for(const auto &file_name : object_files)
   {
-    if(read_object_and_link(file_name, goto_model, get_message_handler()))
+    if(read_object_and_link(file_name, goto_model, log.get_message_handler()))
       return true;
   }
 
@@ -336,20 +341,20 @@ bool compilet::link()
 
     const bool error = ansi_c_entry_point(
       goto_model.symbol_table,
-      get_message_handler(),
+      log.get_message_handler(),
       c_object_factory_parameterst());
 
     if(error)
       return true;
 
     // entry_point may (should) add some more functions.
-    convert_symbols(goto_model.goto_functions);
+    convert_symbols(goto_model);
   }
 
   if(keep_file_local)
   {
     function_name_manglert<file_name_manglert> mangler(
-      get_message_handler(), goto_model, file_local_mangle_suffix);
+      log.get_message_handler(), goto_model, file_local_mangle_suffix);
     mangler.mangle();
   }
 
@@ -359,11 +364,13 @@ bool compilet::link()
   return add_written_cprover_symbols(goto_model.symbol_table);
 }
 
-/// parses source files and writes object files, or keeps the symbols in the
-/// symbol_table depending on the doLink flag.
-/// \return true on error, false otherwise
-bool compilet::compile()
+/// Parses source files and writes object files, or keeps the symbols in the
+/// symbol_table if not compiling/assembling only.
+/// \return Symbol table, if parsing and type checking succeeded, else empty
+optionalt<symbol_tablet> compilet::compile()
 {
+  symbol_tablet symbol_table;
+
   while(!source_files.empty())
   {
     std::string file_name=source_files.front();
@@ -374,9 +381,9 @@ bool compilet::compile()
     if(echo_file_name)
       std::cout << get_base_name(file_name, false) << '\n' << std::flush;
 
-    bool r=parse_source(file_name); // don't break the program!
+    auto file_symbol_table = parse_source(file_name);
 
-    if(r)
+    if(!file_symbol_table.has_value())
     {
       const std::string &debug_outfile=
         cmdline.get_value("print-rejected-preprocessed-source");
@@ -385,10 +392,10 @@ bool compilet::compile()
         std::ifstream in(file_name, std::ios::binary);
         std::ofstream out(debug_outfile, std::ios::binary);
         out << in.rdbuf();
-        warning() << "Failed sources in " << debug_outfile << eom;
+        log.warning() << "Failed sources in " << debug_outfile << messaget::eom;
       }
 
-      return true; // parser/typecheck error
+      return {}; // parser/typecheck error
     }
 
     if(mode==COMPILE_ONLY || mode==ASSEMBLE_ONLY)
@@ -396,7 +403,9 @@ bool compilet::compile()
       // output an object file for every source file
 
       // "compile" functions
-      convert_symbols(goto_model.goto_functions);
+      goto_modelt file_goto_model;
+      file_goto_model.symbol_table = std::move(*file_symbol_table);
+      convert_symbols(file_goto_model);
 
       std::string cfn;
 
@@ -416,21 +425,26 @@ bool compilet::compile()
       if(keep_file_local)
       {
         function_name_manglert<file_name_manglert> mangler(
-          get_message_handler(), goto_model, file_local_mangle_suffix);
+          log.get_message_handler(), file_goto_model, file_local_mangle_suffix);
         mangler.mangle();
       }
 
-      if(write_bin_object_file(cfn, goto_model))
-        return true;
+      if(write_bin_object_file(cfn, file_goto_model))
+        return {};
 
-      if(add_written_cprover_symbols(goto_model.symbol_table))
-        return true;
-
-      goto_model.clear(); // clean symbol table for next source file.
+      if(add_written_cprover_symbols(file_goto_model.symbol_table))
+        return {};
+    }
+    else
+    {
+      if(linking(symbol_table, *file_symbol_table, log.get_message_handler()))
+      {
+        return {};
+      }
     }
   }
 
-  return false;
+  return std::move(symbol_table);
 }
 
 /// parses a source file (low-level parsing)
@@ -456,11 +470,12 @@ bool compilet::parse(
 
   if(languagep==nullptr)
   {
-    error() << "failed to figure out type of file '" << file_name << "'" << eom;
+    log.error() << "failed to figure out type of file '" << file_name << "'"
+                << messaget::eom;
     return true;
   }
 
-  languagep->set_message_handler(get_message_handler());
+  languagep->set_message_handler(log.get_message_handler());
 
   if(file_name == "-")
     return parse_stdin(*languagep);
@@ -473,7 +488,8 @@ bool compilet::parse(
 
   if(!infile)
   {
-    error() << "failed to open input file '" << file_name << "'" << eom;
+    log.error() << "failed to open input file '" << file_name << "'"
+                << messaget::eom;
     return true;
   }
 
@@ -482,7 +498,7 @@ bool compilet::parse(
 
   if(mode==PREPROCESS_ONLY)
   {
-    statistics() << "Preprocessing: " << file_name << eom;
+    log.statistics() << "Preprocessing: " << file_name << messaget::eom;
 
     std::ostream *os = &std::cout;
     std::ofstream ofs;
@@ -494,8 +510,8 @@ bool compilet::parse(
 
       if(!ofs.is_open())
       {
-        error() << "failed to open output file '" << cmdline.get_value('o')
-                << "'" << eom;
+        log.error() << "failed to open output file '" << cmdline.get_value('o')
+                    << "'" << messaget::eom;
         return true;
       }
     }
@@ -504,11 +520,11 @@ bool compilet::parse(
   }
   else
   {
-    statistics() << "Parsing: " << file_name << eom;
+    log.statistics() << "Parsing: " << file_name << messaget::eom;
 
     if(lf.language->parse(infile, file_name))
     {
-      error() << "PARSING ERROR" << eom;
+      log.error() << "PARSING ERROR" << messaget::eom;
       return true;
     }
   }
@@ -522,7 +538,7 @@ bool compilet::parse(
 /// \return true on error, false otherwise
 bool compilet::parse_stdin(languaget &language)
 {
-  statistics() << "Parsing: (stdin)" << eom;
+  log.statistics() << "Parsing: (stdin)" << messaget::eom;
 
   if(mode==PREPROCESS_ONLY)
   {
@@ -536,8 +552,8 @@ bool compilet::parse_stdin(languaget &language)
 
       if(!ofs.is_open())
       {
-        error() << "failed to open output file '" << cmdline.get_value('o')
-                << "'" << eom;
+        log.error() << "failed to open output file '" << cmdline.get_value('o')
+                    << "'" << messaget::eom;
         return true;
       }
     }
@@ -548,7 +564,7 @@ bool compilet::parse_stdin(languaget &language)
   {
     if(language.parse(std::cin, ""))
     {
-      error() << "PARSING ERROR" << eom;
+      log.error() << "PARSING ERROR" << messaget::eom;
       return true;
     }
   }
@@ -556,32 +572,33 @@ bool compilet::parse_stdin(languaget &language)
   return false;
 }
 
-/// Writes the goto functions of \p src_goto_model to a binary format object
-/// file.
-/// \param file_name: Target file to serialize \p src_goto_model to
-/// \param src_goto_model: goto model to serialize
-/// \return true on error, false otherwise
 bool compilet::write_bin_object_file(
   const std::string &file_name,
-  const goto_modelt &src_goto_model)
+  const goto_modelt &src_goto_model,
+  bool validate_goto_model,
+  message_handlert &message_handler)
 {
+  messaget log(message_handler);
+
   if(validate_goto_model)
   {
-    status() << "Validating goto model" << eom;
+    log.status() << "Validating goto model" << messaget::eom;
     src_goto_model.validate();
   }
 
-  statistics() << "Writing binary format object '" << file_name << "'" << eom;
+  log.statistics() << "Writing binary format object '" << file_name << "'"
+                   << messaget::eom;
 
   // symbols
-  statistics() << "Symbols in table: "
-               << src_goto_model.symbol_table.symbols.size() << eom;
+  log.statistics() << "Symbols in table: "
+                   << src_goto_model.symbol_table.symbols.size()
+                   << messaget::eom;
 
   std::ofstream outfile(file_name, std::ios::binary);
 
   if(!outfile.is_open())
   {
-    error() << "Error opening file '" << file_name << "'" << eom;
+    log.error() << "Error opening file '" << file_name << "'" << messaget::eom;
     return true;
   }
 
@@ -590,47 +607,46 @@ bool compilet::write_bin_object_file(
 
   const auto cnt = function_body_count(src_goto_model.goto_functions);
 
-  statistics() << "Functions: "
-               << src_goto_model.goto_functions.function_map.size() << "; "
-               << cnt << " have a body." << eom;
+  log.statistics() << "Functions: "
+                   << src_goto_model.goto_functions.function_map.size() << "; "
+                   << cnt << " have a body." << messaget::eom;
 
   outfile.close();
-  wrote_object=true;
 
   return false;
 }
 
-/// parses a source file
-/// \return true on error, false otherwise
-bool compilet::parse_source(const std::string &file_name)
+/// Parses and type checks a source file located at \p file_name.
+/// \return A symbol table if, and only if, parsing and type checking succeeded.
+optionalt<symbol_tablet> compilet::parse_source(const std::string &file_name)
 {
   language_filest language_files;
-  language_files.set_message_handler(get_message_handler());
+  language_files.set_message_handler(log.get_message_handler());
 
   if(parse(file_name, language_files))
-    return true;
+    return {};
 
   // we just typecheck one file here
-  if(language_files.typecheck(goto_model.symbol_table, keep_file_local))
+  symbol_tablet file_symbol_table;
+  if(language_files.typecheck(file_symbol_table, keep_file_local))
   {
-    error() << "CONVERSION ERROR" << eom;
-    return true;
+    log.error() << "CONVERSION ERROR" << messaget::eom;
+    return {};
   }
 
-  if(language_files.final(goto_model.symbol_table))
+  if(language_files.final(file_symbol_table))
   {
-    error() << "CONVERSION ERROR" << eom;
-    return true;
+    log.error() << "CONVERSION ERROR" << messaget::eom;
+    return {};
   }
 
-  return false;
+  return std::move(file_symbol_table);
 }
 
 /// constructor
 /// \return nothing
 compilet::compilet(cmdlinet &_cmdline, message_handlert &mh, bool Werror)
-  : messaget(mh),
-    ns(goto_model.symbol_table),
+  : log(mh),
     cmdline(_cmdline),
     warning_is_fatal(Werror),
     keep_file_local(
@@ -646,9 +662,12 @@ compilet::compilet(cmdlinet &_cmdline, message_handlert &mh, bool Werror)
   working_directory=get_current_working_directory();
 
   if(cmdline.isset("export-function-local-symbols"))
-    warning() << "The `--export-function-local-symbols` flag is deprecated. "
-                 "Please use `--export-file-local-symbols` instead."
-              << eom;
+  {
+    log.warning()
+      << "The `--export-function-local-symbols` flag is deprecated. "
+         "Please use `--export-file-local-symbols` instead."
+      << messaget::eom;
+  }
 }
 
 /// cleans up temporary files
@@ -661,8 +680,7 @@ compilet::~compilet()
     delete_directory(dir);
 }
 
-std::size_t
-compilet::function_body_count(const goto_functionst &functions) const
+std::size_t compilet::function_body_count(const goto_functionst &functions)
 {
   std::size_t count = 0;
 
@@ -679,13 +697,13 @@ void compilet::add_compiler_specific_defines() const
     std::string("__GOTO_CC_VERSION__=") + CBMC_VERSION);
 }
 
-void compilet::convert_symbols(goto_functionst &dest)
+void compilet::convert_symbols(goto_modelt &goto_model)
 {
   symbol_table_buildert symbol_table_builder =
     symbol_table_buildert::wrap(goto_model.symbol_table);
 
   goto_convert_functionst converter(
-    symbol_table_builder, get_message_handler());
+    symbol_table_builder, log.get_message_handler());
 
   // the compilation may add symbols!
 
@@ -712,8 +730,9 @@ void compilet::convert_symbols(goto_functionst &dest)
         s_it->second.is_function() && !s_it->second.is_compiled() &&
         s_it->second.value.is_not_nil())
       {
-        debug() << "Compiling " << s_it->first << eom;
-        converter.convert_function(s_it->first, dest.function_map[s_it->first]);
+        log.debug() << "Compiling " << s_it->first << messaget::eom;
+        converter.convert_function(
+          s_it->first, goto_model.goto_functions.function_map[s_it->first]);
         symbol_table_builder.get_writeable_ref(symbol).set_compiled();
       }
     }
@@ -735,10 +754,12 @@ bool compilet::add_written_cprover_symbols(const symbol_tablet &symbol_table)
 
     if(!inserted && old->second.type!=new_type)
     {
-      error() << "Incompatible CPROVER macro symbol types:" << eom
-              << old->second.type.pretty() << "(at " << old->second.location
-              << ")" << eom << "and" << eom << new_type.pretty()
-              << "(at " << pair.second.location << ")" << eom;
+      log.error() << "Incompatible CPROVER macro symbol types:" << '\n'
+                  << old->second.type.pretty() << "(at " << old->second.location
+                  << ")\n"
+                  << "and\n"
+                  << new_type.pretty() << "(at " << pair.second.location << ")"
+                  << messaget::eom;
       return true;
     }
   }

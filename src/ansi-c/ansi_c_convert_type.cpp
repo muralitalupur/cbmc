@@ -11,8 +11,6 @@ Author: Daniel Kroening, kroening@kroening.com
 
 #include "ansi_c_convert_type.h"
 
-#include <cassert>
-
 #include <util/arith_tools.h>
 #include <util/c_types.h>
 #include <util/config.h>
@@ -34,8 +32,8 @@ void ansi_c_convert_typet::read_rec(const typet &type)
 {
   if(type.id()==ID_merged_type)
   {
-    forall_subtypes(it, type)
-      read_rec(*it);
+    for(const typet &subtype : to_type_with_subtypes(type).subtypes())
+      read_rec(subtype);
   }
   else if(type.id()==ID_signed)
     signed_cnt++;

@@ -8,10 +8,11 @@ Author: Daniel Kroening, kroening@kroening.com
 
 #include "bv_refinement.h"
 
-#include <util/bv_arithmetic.h>
-#include <util/ieee_float.h>
-#include <util/expr_util.h>
 #include <util/arith_tools.h>
+#include <util/bv_arithmetic.h>
+#include <util/expr_util.h>
+#include <util/floatbv_expr.h>
+#include <util/ieee_float.h>
 
 #include <solvers/floatbv/float_utils.h>
 
@@ -157,9 +158,6 @@ void bv_refinementt::get_values(approximationt &a)
 /// refine overapproximation
 void bv_refinementt::check_SAT(approximationt &a)
 {
-  // get values
-  get_values(a);
-
   // see if the satisfying assignment is spurious in any way
 
   const typet &type = a.expr.type();

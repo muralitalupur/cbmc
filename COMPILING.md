@@ -21,17 +21,17 @@ We assume that you have a Debian/Ubuntu or Red Hat-like distribution.
    The GNU Make needs to be version 3.81 or higher.
    On Debian-like distributions, do as root:
    ```
-   apt-get install g++ gcc flex bison make git libwww-perl patch
+   apt-get install g++ gcc flex bison make git curl patch
    ```
    On Red Hat/Fedora or derivates, do as root:
    ```
-   dnf install gcc gcc-c++ flex bison perl-libwww-perl patch
+   dnf install gcc gcc-c++ flex bison curl patch
    ```
    Note that you need g++ version 5.0 or newer.
 
    On Amazon Linux and similar distributions, do as root:
    ```
-   yum install gcc72-c++ flex bison perl-libwww-perl patch tar
+   yum install gcc72-c++ flex bison curl patch tar
    ```
 
    To compile JBMC, you additionally need the JDK and Maven 3. You also
@@ -153,7 +153,7 @@ Follow these instructions:
 
 1. First install Cygwin, then from the Cygwin setup facility install the
    following packages: `flex, bison, tar, gzip, git, make, wget, patch,
-   libwww-perl`.
+   curl`.
 2. Get the CBMC source via
    ```
    git clone https://github.com/diffblue/cbmc cbmc-git
@@ -169,6 +169,16 @@ Follow these instructions:
       Cygwin shell with
       ```
       bash.exe -login
+      ```
+      Please note that this might open a different shell instead, especially if
+      you have installed other Linux subsystems previously. To verify that you
+      are in the correct shell, make sure that the Windows file system can be
+      accessed via the folder`/cygdrive`. If the command above does not open
+      the Cygwin shell, you can also access it by using its absolute path,
+      `C:\cygwin64\bin\bash.exe` by default. In the Developer Command Prompt, 
+      simply type
+      ```
+      C:\cygwin64\bin\bash.exe -login
       ```
    2. To compile with MinGW, use Cygwin setup to install a mingw g++ compiler
       package, i.e. one of `mingw{32,64}-{x86_64,i686}-gcc-g++`. You may also
@@ -266,7 +276,8 @@ require manual modification of build files.
    Generally it is not necessary to manually specify individual compiler or
    linker flags, as CMake defines a number of "build modes" including Debug and
    Release modes. To build in a particular mode, add the flag
-   `-DCMAKE_BUILD_TYPE=Debug` (or `Release`) to the initial invocation.
+   `-DCMAKE_BUILD_TYPE=Debug` (or `RelWithDebInfo`) to the initial invocation.
+   The default is to perform an optimized build via the `Release` configuration.
 
    If you *do* need to manually add flags, use `-DCMAKE_CXX_FLAGS=...` and
    `-DCMAKE_EXE_LINKER_FLAGS=...`. This is useful for enabling clang's
@@ -300,6 +311,21 @@ the need to integrate JBMC as a separate project. Be aware that you need to
 change the build location (Select project in Eclipse -> Properties -> C/C++ 
 Build) to one of the src directories.
 
+# WORKING WITH DOCKER
+
+To compile and run the tools in a Docker container, do the following:
+
+1. From the root folder of the project, run `$ docker build -t cbmc .`
+2. After the building phase has finished, there should be a new 
+   image with the CProver binaries installed under `/usr/local/bin/`.
+
+   To start a container using that image as a base, run `$ docker run -i -t cbmc`
+   This will result in dropping you to a new terminal inside the container. To
+   load files for analysis into the container, one way is by mounting the folder
+   that contains the tests to the container. A possible invocation that does that
+   is: `$ docker run --mount type=bind,source=local/path/with/files,target=/mnt/analysis -i t cbmc`. In the
+   resulting container, the files present in the local file system under
+   `local/path/with/files` will be present under `/mnt/analysis`. 
 
 # OPTIONS AND VARIABLES
 

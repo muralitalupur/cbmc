@@ -11,6 +11,7 @@ Author: Daniel Kroening, kroening@kroening.com
 
 #include "compute_called_functions.h"
 
+#include <util/pointer_expr.h>
 #include <util/std_expr.h>
 
 /// get all functions whose address is taken
@@ -67,8 +68,8 @@ void compute_address_taken_functions(
   const goto_functionst &goto_functions,
   std::unordered_set<irep_idt> &address_taken)
 {
-  forall_goto_functions(it, goto_functions)
-    compute_address_taken_functions(it->second.body, address_taken);
+  for(const auto &gf_entry : goto_functions.function_map)
+    compute_address_taken_functions(gf_entry.second.body, address_taken);
 }
 
 /// get all functions whose address is taken
@@ -109,13 +110,12 @@ compute_called_functions(const goto_functionst &goto_functions)
 
     compute_address_taken_functions(program, working_queue);
 
-    forall_goto_program_instructions(i_it, program)
+    for(const auto &instruction : program.instructions)
     {
-      if(i_it->is_function_call())
+      if(instruction.is_function_call())
       {
         compute_functions(
-          to_code_function_call(i_it->code).function(),
-          working_queue);
+          to_code_function_call(instruction.code).function(), working_queue);
       }
     }
   }

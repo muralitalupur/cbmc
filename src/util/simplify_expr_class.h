@@ -46,6 +46,7 @@ class function_application_exprt;
 class ieee_float_op_exprt;
 class if_exprt;
 class index_exprt;
+class lambda_exprt;
 class member_exprt;
 class minus_exprt;
 class mod_exprt;
@@ -58,17 +59,12 @@ class popcount_exprt;
 class refined_string_exprt;
 class shift_exprt;
 class sign_exprt;
-class tvt;
 class typecast_exprt;
 class unary_exprt;
 class unary_minus_exprt;
 class unary_plus_exprt;
 class update_exprt;
 class with_exprt;
-
-#define forall_value_list(it, value_list) \
-  for(simplify_exprt::value_listt::const_iterator it=(value_list).begin(); \
-      it!=(value_list).end(); ++it)
 
 class simplify_exprt
 {
@@ -162,7 +158,7 @@ public:
   NODISCARD resultt<> simplify_inequality(const binary_relation_exprt &);
   NODISCARD resultt<>
   simplify_ieee_float_relation(const binary_relation_exprt &);
-  NODISCARD resultt<> simplify_lambda(const exprt &);
+  NODISCARD resultt<> simplify_lambda(const lambda_exprt &);
   NODISCARD resultt<> simplify_with(const with_exprt &);
   NODISCARD resultt<> simplify_update(const update_exprt &);
   NODISCARD resultt<> simplify_index(const index_exprt &);
@@ -171,10 +167,8 @@ public:
   NODISCARD resultt<> simplify_byte_extract(const byte_extract_exprt &);
   NODISCARD resultt<> simplify_pointer_object(const unary_exprt &);
   NODISCARD resultt<> simplify_object_size(const unary_exprt &);
-  NODISCARD resultt<> simplify_dynamic_size(const unary_exprt &);
   NODISCARD resultt<> simplify_is_dynamic_object(const unary_exprt &);
   NODISCARD resultt<> simplify_is_invalid_pointer(const unary_exprt &);
-  NODISCARD resultt<> simplify_same_object(const unary_exprt &);
   NODISCARD resultt<> simplify_good_pointer(const unary_exprt &);
   NODISCARD resultt<> simplify_object(const exprt &);
   NODISCARD resultt<> simplify_unary_minus(const unary_minus_exprt &);
@@ -204,9 +198,6 @@ public:
   bool simplify_if_disj(exprt &expr, const exprt &cond);
   bool simplify_if_branch(exprt &trueexpr, exprt &falseexpr, const exprt &cond);
   bool simplify_if_cond(exprt &expr);
-  bool eliminate_common_addends(exprt &op0, exprt &op1);
-  static tvt objects_equal(const exprt &a, const exprt &b);
-  static tvt objects_equal_address_of(const exprt &a, const exprt &b);
   NODISCARD resultt<> simplify_address_of_arg(const exprt &);
   NODISCARD resultt<>
   simplify_inequality_both_constant(const binary_relation_exprt &);
@@ -226,21 +217,12 @@ public:
 
   virtual bool simplify(exprt &expr);
 
-  typedef std::set<mp_integer> value_listt;
-  bool get_values(const exprt &expr, value_listt &value_list);
-
   static bool is_bitvector_type(const typet &type)
   {
     return type.id()==ID_unsignedbv ||
            type.id()==ID_signedbv ||
            type.id()==ID_bv;
   }
-
-  // bit-level conversions
-  optionalt<exprt>
-  bits2expr(const std::string &bits, const typet &type, bool little_endian);
-
-  optionalt<std::string> expr2bits(const exprt &, bool little_endian);
 
 protected:
   const namespacet &ns;

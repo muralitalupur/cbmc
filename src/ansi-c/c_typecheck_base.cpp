@@ -17,9 +17,9 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <util/prefix.h>
 #include <util/std_types.h>
 
+#include "c_storage_spec.h"
 #include "expr2c.h"
 #include "type2name.h"
-#include "c_storage_spec.h"
 
 std::string c_typecheck_baset::to_string(const exprt &expr)
 {
@@ -101,6 +101,13 @@ void c_typecheck_baset::typecheck_symbol(symbolt &symbol)
   else
   {
     symbol.pretty_name=new_name;
+  }
+
+  if(!symbol.is_type && !symbol.is_extern && symbol.type.id() == ID_empty)
+  {
+    error().source_location = symbol.location;
+    error() << "void-typed symbol not permitted" << eom;
+    throw 0;
   }
 
   // see if we have it already
@@ -451,30 +458,18 @@ void c_typecheck_baset::typecheck_redefinition_non_type(
     // see if we already have one
     if(old_symbol.value.is_not_nil())
     {
-      if(new_symbol.value.get_bool(ID_C_zero_initializer))
+      if(
+        new_symbol.is_macro && final_new.id() == ID_c_enum &&
+        old_symbol.value.is_constant() && new_symbol.value.is_constant() &&
+        old_symbol.value.get(ID_value) == new_symbol.value.get(ID_value))
       {
-        // do nothing
-      }
-      else if(old_symbol.value.get_bool(ID_C_zero_initializer))
-      {
-        old_symbol.value=new_symbol.value;
-        old_symbol.type=new_symbol.type;
+        // ignore
       }
       else
       {
-        if(
-          new_symbol.is_macro && final_new.id() == ID_c_enum &&
-          old_symbol.value.is_constant() && new_symbol.value.is_constant() &&
-          old_symbol.value.get(ID_value) == new_symbol.value.get(ID_value))
-        {
-          // ignore
-        }
-        else
-        {
-          warning().source_location=new_symbol.value.find_source_location();
-          warning() << "symbol '" << new_symbol.display_name()
-                    << "' already has an initial value" << eom;
-        }
+        warning().source_location = new_symbol.value.find_source_location();
+        warning() << "symbol '" << new_symbol.display_name()
+                  << "' already has an initial value" << eom;
       }
     }
     else
@@ -498,9 +493,15 @@ void c_typecheck_baset::typecheck_redefinition_non_type(
 
 void c_typecheck_baset::typecheck_function_body(symbolt &symbol)
 {
-  code_typet &code_type=to_code_type(symbol.type);
+  if(symbol.value.id() != ID_code)
+  {
+    error().source_location = symbol.location;
+    error() << "function '" << symbol.name << "' is initialized with "
+            << symbol.value.id() << eom;
+    throw 0;
+  }
 
-  assert(symbol.value.is_not_nil());
+  code_typet &code_type = to_code_type(symbol.type);
 
   // reset labels
   labels_used.clear();
@@ -627,9 +628,10 @@ void c_typecheck_baset::typecheck_declaration(
 {
   if(declaration.get_is_static_assert())
   {
-    auto &static_assert_expr = to_binary_expr(declaration);
-    typecheck_expr(static_assert_expr.op0());
-    typecheck_expr(static_assert_expr.op1());
+    codet code(ID_static_assert);
+    code.add_source_location() = declaration.source_location();
+    code.operands().swap(declaration.operands());
+    typecheck_code(code);
   }
   else
   {
@@ -645,13 +647,14 @@ void c_typecheck_baset::typecheck_declaration(
     irept contract;
 
     {
-      exprt spec_requires=
-        static_cast<const exprt&>(declaration.find(ID_C_spec_requires));
-      contract.add(ID_C_spec_requires).swap(spec_requires);
+      exprt spec_assigns = declaration.spec_assigns();
+      contract.add(ID_C_spec_assigns).swap(spec_assigns);
 
-      exprt spec_ensures=
-        static_cast<const exprt&>(declaration.find(ID_C_spec_ensures));
+      exprt spec_ensures = declaration.spec_ensures();
       contract.add(ID_C_spec_ensures).swap(spec_ensures);
+
+      exprt spec_requires = declaration.spec_requires();
+      contract.add(ID_C_spec_requires).swap(spec_requires);
     }
 
     // Now do declarators, if any.
@@ -725,6 +728,12 @@ void c_typecheck_baset::typecheck_declaration(
       irep_idt identifier=symbol.name;
       declarator.set_name(identifier);
 
+      // If the declarator is for a function definition, typecheck it.
+      if(can_cast_type<code_typet>(declarator.type()))
+      {
+        typecheck_assigns(to_code_type(declarator.type()), contract);
+      }
+
       typecheck_symbol(symbol);
 
       // add code contract (if any); we typecheck this after the
@@ -732,6 +741,8 @@ void c_typecheck_baset::typecheck_declaration(
       // available
       symbolt &new_symbol = symbol_table.get_writeable_ref(identifier);
 
+      typecheck_assigns_exprs(
+        static_cast<codet &>(contract), ID_C_spec_assigns);
       typecheck_spec_expr(static_cast<codet &>(contract), ID_C_spec_requires);
 
       typet ret_type = void_type();
@@ -743,12 +754,15 @@ void c_typecheck_baset::typecheck_declaration(
       typecheck_spec_expr(static_cast<codet &>(contract), ID_C_spec_ensures);
       parameter_map.clear();
 
-      if(contract.find(ID_C_spec_requires).is_not_nil())
-        new_symbol.type.add(ID_C_spec_requires)=
-          contract.find(ID_C_spec_requires);
-      if(contract.find(ID_C_spec_ensures).is_not_nil())
-        new_symbol.type.add(ID_C_spec_ensures)=
-          contract.find(ID_C_spec_ensures);
+      irept assigns_to_add = contract.find(ID_C_spec_assigns);
+      if(assigns_to_add.is_not_nil())
+        new_symbol.type.add(ID_C_spec_assigns) = assigns_to_add;
+      irept requires_to_add = contract.find(ID_C_spec_requires);
+      if(requires_to_add.is_not_nil())
+        new_symbol.type.add(ID_C_spec_requires) = requires_to_add;
+      irept ensures_to_add = contract.find(ID_C_spec_ensures);
+      if(ensures_to_add.is_not_nil())
+        new_symbol.type.add(ID_C_spec_ensures) = ensures_to_add;
     }
   }
 }

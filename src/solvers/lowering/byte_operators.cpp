@@ -11,6 +11,7 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <algorithm>
 
 #include <util/arith_tools.h>
+#include <util/bitvector_expr.h>
 #include <util/byte_operators.h>
 #include <util/c_types.h>
 #include <util/endianness_map.h>
@@ -20,41 +21,6 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <util/replace_symbol.h>
 #include <util/simplify_expr.h>
 #include <util/string_constant.h>
-
-/// Determine the member of maximum fixed bit width in a union type. If no
-/// member, or no member of fixed and non-zero width can be found, return
-/// nullopt.
-/// \param union_type: Type to determine the member of.
-/// \param ns: Namespace to resolve tag types.
-/// \return Pair of a componentt pointing to the maximum fixed bit-width
-///   member of \p union_type and the bit width of that member.
-static optionalt<std::pair<struct_union_typet::componentt, mp_integer>>
-find_widest_union_component(const union_typet &union_type, const namespacet &ns)
-{
-  const union_typet::componentst &components = union_type.components();
-
-  mp_integer max_width = 0;
-  typet max_comp_type;
-  irep_idt max_comp_name;
-
-  for(const auto &comp : components)
-  {
-    auto element_width = pointer_offset_bits(comp.type(), ns);
-
-    if(!element_width.has_value() || *element_width <= max_width)
-      continue;
-
-    max_width = *element_width;
-    max_comp_type = comp.type();
-    max_comp_name = comp.get_name();
-  }
-
-  if(max_width == 0)
-    return {};
-  else
-    return std::make_pair(
-      struct_union_typet::componentt{max_comp_name, max_comp_type}, max_width);
-}
 
 static exprt bv_to_expr(
   const exprt &bitvector_expr,
@@ -155,7 +121,7 @@ static union_exprt bv_to_union_expr(
   if(components.empty())
     return union_exprt{irep_idt{}, nil_exprt{}, union_type};
 
-  const auto widest_member = find_widest_union_component(union_type, ns);
+  const auto widest_member = union_type.find_widest_union_component(ns);
 
   std::size_t component_bits;
   if(widest_member.has_value())
@@ -510,26 +476,17 @@ static exprt unpack_array_vector(
         body};
     }
 
-    optionalt<exprt> array_vector_size;
-    optionalt<typet> subtype;
-    if(src.type().id() == ID_vector)
-    {
-      array_vector_size = to_vector_type(src.type()).size();
-      subtype = to_vector_type(src.type()).subtype();
-    }
-    else
-    {
-      array_vector_size = to_array_type(src.type()).size();
-      subtype = to_array_type(src.type()).subtype();
-    }
+    const exprt array_vector_size = src.type().id() == ID_vector
+                                      ? to_vector_type(src.type()).size()
+                                      : to_array_type(src.type()).size();
 
     return array_comprehension_exprt{
       std::move(array_comprehension_index),
       std::move(body),
       array_typet{
-        *subtype,
-        mult_exprt{*array_vector_size,
-                   from_integer(el_bytes, array_vector_size->type())}}};
+        bv_typet{8},
+        mult_exprt{array_vector_size,
+                   from_integer(el_bytes, array_vector_size.type())}}};
   }
 
   exprt::operandst byte_operands;
@@ -583,11 +540,24 @@ static exprt unpack_array_vector(
 
     // recursively unpack each element so that we eventually just have an array
     // of bytes left
-    exprt sub = unpack_rec(element, little_endian, {}, max_bytes, ns, true);
+
+    const optionalt<mp_integer> element_max_bytes =
+      max_bytes
+        ? std::min(mp_integer{el_bytes}, *max_bytes - byte_operands.size())
+        : optionalt<mp_integer>{};
+    const std::size_t element_max_bytes_int =
+      element_max_bytes ? numeric_cast_v<std::size_t>(*element_max_bytes)
+                        : el_bytes;
+
+    exprt sub =
+      unpack_rec(element, little_endian, {}, element_max_bytes, ns, true);
     exprt::operandst sub_operands =
-      instantiate_byte_array(sub, 0, el_bytes, ns);
+      instantiate_byte_array(sub, 0, element_max_bytes_int, ns);
     byte_operands.insert(
       byte_operands.end(), sub_operands.begin(), sub_operands.end());
+
+    if(max_bytes && byte_operands.size() >= *max_bytes)
+      break;
   }
 
   const std::size_t size = byte_operands.size();
@@ -926,17 +896,35 @@ static exprt unpack_rec(
     // endianness
     auto bits_opt = pointer_offset_bits(src.type(), ns);
     DATA_INVARIANT(bits_opt.has_value(), "basic type should have a fixed size");
-    mp_integer bits = *bits_opt;
 
+    const mp_integer total_bits = *bits_opt;
+    mp_integer last_bit = total_bits;
+    mp_integer bit_offset = 0;
+
+    if(max_bytes.has_value())
+    {
+      const auto max_bits = *max_bytes * 8;
+      if(little_endian)
+      {
+        last_bit = std::min(last_bit, max_bits);
+      }
+      else
+      {
+        bit_offset = std::max(mp_integer{0}, last_bit - max_bits);
+      }
+    }
+
+    auto const src_as_bitvector = typecast_exprt::conditional_cast(
+      src, bv_typet{numeric_cast_v<std::size_t>(total_bits)});
+    auto const byte_type = bv_typet{8};
     exprt::operandst byte_operands;
-    for(mp_integer i=0; i<bits; i+=8)
+    for(; bit_offset < last_bit; bit_offset += 8)
     {
       extractbits_exprt extractbits(
-        typecast_exprt::conditional_cast(
-          src, bv_typet{numeric_cast_v<std::size_t>(bits)}),
-        from_integer(i + 7, index_type()),
-        from_integer(i, index_type()),
-        bv_typet{8});
+        src_as_bitvector,
+        from_integer(bit_offset + 7, index_type()),
+        from_integer(bit_offset, index_type()),
+        byte_type);
 
       // endianness_mapt should be the point of reference for mapping out
       // endianness, but we need to work on elements here instead of
@@ -1048,7 +1036,7 @@ exprt lower_byte_extract(const byte_extract_exprt &src, const namespacet &ns)
     src.id() == ID_byte_extract_big_endian);
   const bool little_endian = src.id() == ID_byte_extract_little_endian;
 
-  // determine an upper bound of the number of bytes we might need
+  // determine an upper bound of the last byte we might need
   auto upper_bound_opt = size_of_expr(src.type(), ns);
   if(upper_bound_opt.has_value())
   {
@@ -1069,6 +1057,9 @@ exprt lower_byte_extract(const byte_extract_exprt &src, const namespacet &ns)
   byte_extract_exprt unpacked(src);
   unpacked.op() = unpack_rec(
     src.op(), little_endian, lower_bound_int_opt, upper_bound_int_opt, ns);
+  CHECK_RETURN(
+    to_bitvector_type(to_type_with_subtype(unpacked.op().type()).subtype())
+      .get_width() == 8);
 
   if(src.type().id()==ID_array)
   {
@@ -1082,8 +1073,6 @@ exprt lower_byte_extract(const byte_extract_exprt &src, const namespacet &ns)
     if(element_bits.has_value() && *element_bits >= 1 && *element_bits % 8 == 0)
     {
       auto num_elements = numeric_cast<std::size_t>(array_type.size());
-      if(!num_elements.has_value() && unpacked.op().id() == ID_array)
-        num_elements = unpacked.op().operands().size();
 
       if(num_elements.has_value())
       {
@@ -1222,7 +1211,7 @@ exprt lower_byte_extract(const byte_extract_exprt &src, const namespacet &ns)
   {
     const union_typet &union_type = to_union_type(ns.follow(src.type()));
 
-    const auto widest_member = find_widest_union_component(union_type, ns);
+    const auto widest_member = union_type.find_widest_union_component(ns);
 
     if(widest_member.has_value())
     {
@@ -1262,11 +1251,10 @@ exprt lower_byte_extract(const byte_extract_exprt &src, const namespacet &ns)
     size_bits = op0_bits;
   }
 
-  mp_integer num_elements =
-    (*size_bits) / 8 + (((*size_bits) % 8 == 0) ? 0 : 1);
+  mp_integer num_bytes = (*size_bits) / 8 + (((*size_bits) % 8 == 0) ? 0 : 1);
 
   // get 'width'-many bytes, and concatenate
-  const std::size_t width_bytes = numeric_cast_v<std::size_t>(num_elements);
+  const std::size_t width_bytes = numeric_cast_v<std::size_t>(num_bytes);
   exprt::operandst op;
   op.reserve(width_bytes);
 
@@ -2029,7 +2017,7 @@ static exprt lower_byte_update_union(
   const optionalt<exprt> &non_const_update_bound,
   const namespacet &ns)
 {
-  const auto widest_member = find_widest_union_component(union_type, ns);
+  const auto widest_member = union_type.find_widest_union_component(ns);
 
   PRECONDITION_WITH_DIAGNOSTICS(
     widest_member.has_value(),
@@ -2136,10 +2124,30 @@ static exprt lower_byte_update(
         instantiate_byte_array(value_as_byte_array, 0, (type_bits + 7) / 8, ns);
     }
 
+    const std::size_t update_size_bits = update_bytes.size() * 8;
+    const std::size_t bit_width = std::max(type_bits, update_size_bits);
+
+    const bool is_little_endian = src.id() == ID_byte_update_little_endian;
+
+    exprt val_before =
+      typecast_exprt::conditional_cast(src.op(), bv_typet{type_bits});
+    if(bit_width > type_bits)
+    {
+      val_before =
+        concatenation_exprt{from_integer(0, bv_typet{bit_width - type_bits}),
+                            val_before,
+                            bv_typet{bit_width}};
+
+      if(!is_little_endian)
+        to_concatenation_expr(val_before)
+          .op0()
+          .swap(to_concatenation_expr(val_before).op1());
+    }
+
     if(non_const_update_bound.has_value())
     {
       const exprt src_as_bytes = unpack_rec(
-        src.op(),
+        val_before,
         src.id() == ID_byte_update_little_endian,
         mp_integer{0},
         mp_integer{update_bytes.size()},
@@ -2158,19 +2166,15 @@ static exprt lower_byte_update(
       }
     }
 
-    const std::size_t update_size = update_bytes.size();
-    const std::size_t width = std::max(type_bits, update_size * 8);
-
-    const bool is_little_endian = src.id() == ID_byte_update_little_endian;
-
     // build mask
     exprt mask;
     if(is_little_endian)
-      mask = from_integer(power(2, update_size * 8) - 1, bv_typet{width});
+      mask = from_integer(power(2, update_size_bits) - 1, bv_typet{bit_width});
     else
     {
       mask = from_integer(
-        power(2, width) - power(2, width - update_size * 8), bv_typet{width});
+        power(2, bit_width) - power(2, bit_width - update_size_bits),
+        bv_typet{bit_width});
     }
 
     const typet &offset_type = src.offset().type();
@@ -2186,34 +2190,20 @@ static exprt lower_byte_update(
       mask_shifted.true_case().swap(mask_shifted.false_case());
 
     // original_bits &= ~mask
-    exprt val_before =
-      typecast_exprt::conditional_cast(src.op(), bv_typet{type_bits});
-    if(width > type_bits)
-    {
-      val_before =
-        concatenation_exprt{from_integer(0, bv_typet{width - type_bits}),
-                            val_before,
-                            bv_typet{width}};
-
-      if(!is_little_endian)
-        to_concatenation_expr(val_before)
-          .op0()
-          .swap(to_concatenation_expr(val_before).op1());
-    }
     bitand_exprt bitand_expr{val_before, bitnot_exprt{mask_shifted}};
 
     // concatenate and zero-extend the value
-    concatenation_exprt value{update_bytes, bv_typet{update_size * 8}};
+    concatenation_exprt value{update_bytes, bv_typet{update_size_bits}};
     if(is_little_endian)
       std::reverse(value.operands().begin(), value.operands().end());
 
     exprt zero_extended;
-    if(width > update_size * 8)
+    if(bit_width > update_size_bits)
     {
-      zero_extended =
-        concatenation_exprt{from_integer(0, bv_typet{width - update_size * 8}),
-                            value,
-                            bv_typet{width}};
+      zero_extended = concatenation_exprt{
+        from_integer(0, bv_typet{bit_width - update_size_bits}),
+        value,
+        bv_typet{bit_width}};
 
       if(!is_little_endian)
         to_concatenation_expr(zero_extended)
@@ -2233,12 +2223,22 @@ static exprt lower_byte_update(
     // original_bits |= newvalue
     bitor_exprt bitor_expr{bitand_expr, value_shifted};
 
-    if(!is_little_endian && width > type_bits)
+    if(!is_little_endian && bit_width > type_bits)
     {
       return simplify_expr(
         typecast_exprt::conditional_cast(
-          extractbits_exprt{
-            bitor_expr, width - 1, width - type_bits, bv_typet{type_bits}},
+          extractbits_exprt{bitor_expr,
+                            bit_width - 1,
+                            bit_width - type_bits,
+                            bv_typet{type_bits}},
+          src.type()),
+        ns);
+    }
+    else if(bit_width > type_bits)
+    {
+      return simplify_expr(
+        typecast_exprt::conditional_cast(
+          extractbits_exprt{bitor_expr, type_bits - 1, 0, bv_typet{type_bits}},
           src.type()),
         ns);
     }

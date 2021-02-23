@@ -63,16 +63,6 @@ bool has_symbol(
 
 void find_symbols(
   const exprt &src,
-  std::set<exprt> &dest)
-{
-  src.visit_pre([&dest](const exprt &e) {
-    if(e.id() == ID_symbol || e.id() == ID_next_symbol)
-      dest.insert(e);
-  });
-}
-
-void find_symbols(
-  const exprt &src,
   std::set<symbol_exprt> &dest)
 {
   src.visit_pre([&dest](const exprt &e) {
@@ -134,8 +124,8 @@ void find_symbols(kindt kind, const typet &src, find_symbols_sett &dest)
     if(src.has_subtype())
       find_symbols(kind, to_type_with_subtype(src).subtype(), dest);
 
-    forall_subtypes(it, src)
-      find_symbols(kind, *it, dest);
+    for(const typet &subtype : to_type_with_subtypes(src).subtypes())
+      find_symbols(kind, subtype, dest);
 
     const irep_idt &typedef_name=src.get(ID_C_typedef);
     if(!typedef_name.empty())

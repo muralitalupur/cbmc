@@ -13,8 +13,9 @@ Author: Daniel Kroening, kroening@kroening.com
 
 // #include <langapi/language_util.h>
 
-#include <util/std_expr.h>
+#include <util/pointer_expr.h>
 #include <util/std_code.h>
+#include <util/std_expr.h>
 
 #include <util/invariant.h>
 
@@ -225,6 +226,7 @@ exprt wp_decl(
   const exprt &post,
   const namespacet &ns)
 {
+  PRECONDITION(!code.initial_value());
   // Model decl(var) as var = nondet()
   const exprt &var = code.symbol();
   side_effect_expr_nondett nondet(var.type(), source_locationt());

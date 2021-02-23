@@ -119,7 +119,7 @@ Let us have a closer look at this property and why it fails. To aid the
 understanding of the problem, CBMC can generate a *counterexample trace*
 for failed properties. To obtain this trace, run:
 
-    cbmc file1.c --bounds-check --trace
+    cbmc file1.c --bounds-check --pointer-check --trace
 
 CBMC then prints a counterexample trace, that is, a program trace that
 begins with `main` and ends in a state which violates the property. In
@@ -134,7 +134,7 @@ To simplify further processing of counterexample traces, CBMC supports XML as a
 possible output format.
 
 ```
-    cbmc file1.c --trace --xml-ui
+    cbmc file1.c --bounds-check --pointer-check --trace --xml-ui
 ```
 
 The specification of the XML trace output can be found here: [XML
@@ -216,7 +216,7 @@ given as a command line argument:
 cbmc binsearch.c --function binsearch --unwind 6 --bounds-check --unwinding-assertions
 ```
 
-CBMC verifies that verifies the array accesses are within the bounds;
+CBMC verifies that the array accesses are within the bounds;
 note that this actually depends on the result of the right shift. In
 addition, as CBMC is given the option `--unwinding-assertions`, it also
 checks that enough unwinding is done, i.e., it proves a run-time bound.

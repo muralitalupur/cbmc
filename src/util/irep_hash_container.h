@@ -12,6 +12,7 @@ Author: Daniel Kroening, kroening@kroening.com
 #ifndef CPROVER_UTIL_IREP_HASH_CONTAINER_H
 #define CPROVER_UTIL_IREP_HASH_CONTAINER_H
 
+#include <map>
 #include <vector>
 
 #include "irep.h"
@@ -69,8 +70,7 @@ protected:
     std::size_t operator()(const packedt &p) const;
   };
 
-  typedef hash_numbering<packedt, vector_hasht> numberingt;
-  numberingt numbering;
+  numberingt<packedt, vector_hasht> numbering;
 
   void pack(const irept &irep, packedt &);
 

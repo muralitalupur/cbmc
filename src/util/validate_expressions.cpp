@@ -15,6 +15,7 @@ Author: Daniel Poetzl
 
 #include "expr.h"
 #include "namespace.h"
+#include "pointer_expr.h"
 #include "ssa_expr.h"
 #include "std_expr.h"
 #include "validate.h"
@@ -33,7 +34,7 @@ void call_on_expr(const exprt &expr, Args &&... args)
   {
     CALL_ON_EXPR(plus_exprt);
   }
-  else if(expr.get_bool(ID_C_SSA_symbol))
+  else if(is_ssa_expr(expr))
   {
     CALL_ON_EXPR(ssa_exprt);
   }
